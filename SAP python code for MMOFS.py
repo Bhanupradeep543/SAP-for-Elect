@@ -149,7 +149,7 @@ summary_df = summary_df.sort_values(
 st.subheader("📊 Defect Summary")
 
 st.dataframe(summary_df)
-keywords = {"Stage-1": "S1COM","Stage-2": "S2COM","Stage-3": "S3COM" }
+keywords = {"Stage-1": "S1","Stage-2": "S2","Stage-3": "S3" }
 st.subheader("Select the stage for detailed Analysis:")
 selected = st.multiselect("select:",list(keywords.keys()))
 if selected:
