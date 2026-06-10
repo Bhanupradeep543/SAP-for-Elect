@@ -117,7 +117,7 @@ defect_patterns = {
     "Reverse Rotation/Decoupled": r"reverse|REVERSE|Reverse|Decouple|decouple|DECOUPLE",
     "Pipe Leakages": r"pipe|PIPE|LINE|Line|line|Pipe|hdr|HDR|header|HEADER",
     "Overloading/Tripping": r"overload|OVERLOAD|overload|TRIP|trip|Trip|OL|Overload|O/L|o/l|current|CURRENT|Current|curren",
-    "Pump Pressure Issues": r"pr low|PR LOW|DEVELOP|develop|Develop|pressure|PRESSURE|devlp",
+    "Pressure Related Issues": r"pr low|PR LOW|DEVELOP|develop|Develop|pressure|PRESSURE|devlp",
     "Choking Issues": r"CHOKE|choke|Choke",
     "Jamming Issues": r"JAM|jam"
 }
@@ -172,7 +172,7 @@ if selected:
   yearly_count = data3.groupby("Year")['Notif.date'].count().reset_index()
   yearly_count.rename(columns={'Notif.date': "NTS/ module related"}, inplace=True)
   st.subheader("📅 Year-wise NTS/ module related")
-  st.bar_chart(data=yearly_count, x="Year", y="gland leak")      
+  st.bar_chart(data=yearly_count, x="Year", y="NTS/ module related")      
      
   data4=data2[data2['Description'].str.contains('Vibration|vibration|VIBRATION|vib|VIB')]
   data4["Year"] = data4['Notif.date'].dt.year
@@ -240,11 +240,11 @@ if selected:
 
   data12=data2[data2['Description'].str.contains('pr low|PR LOW|DEVELOP|develop|Develop|pressure|PRESSURE|devlp')]
   data12["Year"] = data12['Notif.date'].dt.year
-  st.write("no.of pump pressure related issues in the selected stage",data12.shape[0])
+  st.write("no.of Pressure Related Issues in the selected stage",data12.shape[0])
   yearly_count = data12.groupby("Year")['Notif.date'].count().reset_index()
-  yearly_count.rename(columns={'Notif.date': "pump pressure issues"}, inplace=True)
-  st.subheader("📅 Year-wise pump pressure issues")
-  st.bar_chart(data=yearly_count, x="Year", y="pump pressure issues")
+  yearly_count.rename(columns={'Notif.date': "Pressure Related Issues"}, inplace=True)
+  st.subheader("📅 Year-wise Pressure Related Issues")
+  st.bar_chart(data=yearly_count, x="Year", y="Pressure Related Issues")
 
   data13=data2[data2['Description'].str.contains('CHOKE|choke|Choke')]
   data13["Year"] = data13['Notif.date'].dt.year
