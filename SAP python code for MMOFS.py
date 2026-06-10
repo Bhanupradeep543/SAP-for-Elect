@@ -62,9 +62,9 @@ st.subheader("system wise no.of defects in last 10 years")
 st.dataframe(df_final)
 # Stage keywords
 keywords = {
-    "Stage-1": "S1COM",
-    "Stage-2": "S2COM",
-    "Stage-3": "S3COM"
+    "Stage-1": "S1",
+    "Stage-2": "S2",
+    "Stage-3": "S3"
 }
 # Empty list to store results
 stage_summary = []
