@@ -155,7 +155,7 @@ selected = st.multiselect("select:",list(keywords.keys()))
 if selected:
  selected_keywords = [keywords[s] for s in selected]
  for k in selected_keywords:
-  data2=data[data['Functional Loc.'].str.contains(k)]
+  data2=data[data['Functional Location'].str.contains(k)]
   st.subheader("Total defects in the selected stage")
   st.write(data2.shape[0])
   repeat_defects = (data2.groupby(['equipment']).size().reset_index(name='Count'))     
