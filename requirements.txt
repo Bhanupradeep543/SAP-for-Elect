@@ -1,0 +1,16 @@
+streamlit
+numpy
+pandas
+scipy
+scikit-learn
+scikit-image
+statsmodels
+seaborn
+plotly
+openpyxl
+altair
+mlxtend
+ply
+
+
+
