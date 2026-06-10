@@ -203,7 +203,7 @@ if selected:
   data7["Year"] = data7['Basic start date'].dt.year
   st.write("no.of valve issues in the selected stage",data7.shape[0])
   yearly_count = data7.groupby("Year")['Basic start date'].count().reset_index()
-  yearly_count.rename(columns={'Notif.date': "Valve issues"}, inplace=True)
+  yearly_count.rename(columns={'Basic start date': "Valve issues"}, inplace=True)
   st.subheader("📅 Year-wise Valve issues")
   st.bar_chart(data=yearly_count, x="Year", y="Valve issues")
 
