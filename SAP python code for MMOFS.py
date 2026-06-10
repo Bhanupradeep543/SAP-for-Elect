@@ -40,13 +40,13 @@ def extract_parent(s):
     parts = s.split("-")
     return "-".join(parts[:3]) if len(parts) >= 3 else s
 # Extract parent
-data1["parent"] = data1[COL].astype(str).apply(extract_parent)
+data["parent"] = data[COL].astype(str).apply(extract_parent)
 # Keep only valid parents
-df_valid = data1[data1["parent"].apply(is_valid_parent)]
+df_valid = data[data["parent"].apply(is_valid_parent)]
 # Get unique rows for parent → equipment mapping
 df_unique = df_valid.drop_duplicates(subset=["parent"])[["parent", EQUIP]]
 # Count appearances in the full master dataset
-appearance = data1.groupby("parent").size().reset_index(name="Total Count")
+appearance = data.groupby("parent").size().reset_index(name="Total Count")
 # Merge with unique mapping
 df_final = df_unique.merge(appearance, on="parent", how="left")
 # Filter: appearances > 40
