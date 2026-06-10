@@ -219,7 +219,7 @@ if selected:
   data9["Year"] = data9['Basic start date'].dt.year
   st.write("no.of C&I instruments/feedback related issues in the selected stage",data9.shape[0])
   yearly_count = data9.groupby("Year")['Basic start date'].count().reset_index()
-  yearly_count.rename(columns={'Basic start date': "C&I instruments/feedback relateds"}, inplace=True)
+  yearly_count.rename(columns={'Basic start date': "C&I instruments/feedback related"}, inplace=True)
   st.subheader("📅 Year-wise C&I instruments/feedback related issues")
   st.bar_chart(data=yearly_count, x="Year", y="C&I instruments/feedback related")
      
