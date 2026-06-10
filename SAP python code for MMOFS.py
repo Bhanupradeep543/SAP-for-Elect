@@ -111,7 +111,7 @@ defect_patterns = {
     "Vibrational Related": r"Vibration|vibration|VIBRATION|vib|VIB",
     "Bearing/Coupling Abnormalities": r"sound|SOUND|Sound|bearing|BRG|BEARING|Bearing|brng|BRNG|thrust|THRUST|Thrust",
     "NRV Passing": r"nrv|NRV|Nrv",
-    "NTS/ module related": r"nts|NTS|Nts|MODULE|module|Module|brkr|BREAKER|Breaker|bkr",
+    "NTS/ module related": r"nts|NTS|Nts|MODULE|module|Module|brkr|BREAKER|Breaker|bkr|FUSES|fuses|Fuses",
     "Valve Issues": r"valve|VALVE|vlv|VLV|Valve|v/v|BFV|bfv",
     "Oil Leakage": r"oil|OIL|Oil",
     "Reverse Rotation/Decoupled": r"reverse|REVERSE|Reverse|Decouple|decouple|DECOUPLE",
@@ -166,7 +166,7 @@ if selected:
   df['each notification interval in terms of weeks'] = ((multiplier)/df['Count']).round().astype(int)
   st.write(df)
    
-  data3=data2[data2['Description'].str.contains('nts|NTS|Nts|MODULE|module|Module|brkr|BREAKER|Breaker|bkr')]
+  data3=data2[data2['Description'].str.contains('nts|NTS|Nts|MODULE|module|Module|brkr|BREAKER|Breaker|bkr|FUSES|fuses|Fuses')]
   data3["Year"] = data3['Notif.date'].dt.year
   st.write("no.of NTS/module related in the selected stage",data3.shape[0])
   yearly_count = data3.groupby("Year")['Notif.date'].count().reset_index()
