@@ -18,7 +18,7 @@ data = pd.read_excel(uploaded_file)
 st.success("File loaded successfully")
 data['Basic start date'] = pd.to_datetime(data['Basic start date'], format='%Y%m%d')
 st.subheader('Total SAP notifications considered for analysis')
-st.subheader(data1.shape[0])
+st.subheader(data.shape[0])
 st.subheader('Top 20 Repeated equipment notifications')
 data=data[data['equipment']!='KORBA STATION COMMON']
 repeat_defects = (data.groupby(['equipment']).size().reset_index(name='Count'))
