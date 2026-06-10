@@ -25,7 +25,7 @@ repeat_defects = (data.groupby(['equipment']).size().reset_index(name='Count'))
 repeated = repeat_defects[repeat_defects['Count'] > 50]
 repeated = repeated.sort_values(by=['Count', 'equipment'], ascending=[False, True]).head(20)
 st.write(repeated)
-COL = "Functional Loc."
+COL = "Functional Location"
 EQUIP = "equipment"
 def is_valid_parent(s):
     hyphens = s.count("-")
