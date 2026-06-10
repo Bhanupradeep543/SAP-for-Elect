@@ -114,12 +114,13 @@ defect_patterns = {
     "NTS/ module related": r"nts|NTS|Nts|MODULE|module|Module|brkr|BREAKER|Breaker|bkr|FUSES|fuses|Fuses",
     "Valve Issues": r"valve|VALVE|vlv|VLV|Valve|v/v|BFV|bfv",
     "Oil Leakage": r"oil|OIL|Oil",
-    "Reverse Rotation/Decoupled": r"reverse|REVERSE|Reverse|Decouple|decouple|DECOUPLE",
+    "C&I instruments/feedback related": r"F/B|TX|SWITCH|gauge|DCS|tx|Display|display|BAD|panel|PANNEL|hunt|HUNT|Tx|guage|switch",
     "Pipe Leakages": r"pipe|PIPE|LINE|Line|line|Pipe|hdr|HDR|header|HEADER",
     "Overloading/Tripping": r"overload|OVERLOAD|overload|TRIP|trip|Trip|OL|Overload|O/L|o/l|current|CURRENT|Current|curren",
     "Pressure Related Issues": r"pr low|PR LOW|DEVELOP|develop|Develop|pressure|PRESSURE|devlp",
     "Choking Issues": r"CHOKE|choke|Choke",
     "Jamming Issues": r"JAM|jam"
+    
 }
 # Summary table
 summary = []
@@ -214,13 +215,13 @@ if selected:
   st.subheader("📅 Year-wise Oil leaks/ oil top up issues")
   st.bar_chart(data=yearly_count, x="Year", y="Oil leaks/ oil top up issues")
 
-  data9=data2[data2['Description'].str.contains('reverse|REVERSE|Reverse|Decouple|decouple|DECOUPLE')]
+  data9=data2[data2['Description'].str.contains('F/B|TX|SWITCH|gauge|DCS|tx|Display|display|BAD|panel|PANNEL|hunt|HUNT|Tx|guage|switch')]
   data9["Year"] = data9['Notif.date'].dt.year
-  st.write("no.of pump/Fan shaft Decoupled/reverse rotational issues in the selected stage",data9.shape[0])
+  st.write("no.of C&I instruments/feedback related issues in the selected stage",data9.shape[0])
   yearly_count = data9.groupby("Year")['Notif.date'].count().reset_index()
-  yearly_count.rename(columns={'Notif.date': "pump/Fan shaft jam/reverse rotational issues"}, inplace=True)
-  st.subheader("📅 Year-wise pump/Fan shaft Decoupled/reverse rotational issues")
-  st.bar_chart(data=yearly_count, x="Year", y="pump/Fan shaft jam/reverse rotational issues")
+  yearly_count.rename(columns={'Notif.date': "C&I instruments/feedback relateds"}, inplace=True)
+  st.subheader("📅 Year-wise C&I instruments/feedback related issues")
+  st.bar_chart(data=yearly_count, x="Year", y="C&I instruments/feedback related")
      
   data10=data2[data2['Description'].str.contains('pipe|PIPE|LINE|Line|line|Pipe|hdr|HDR|header|HEADER')]
   data10["Year"] = data10['Notif.date'].dt.year
