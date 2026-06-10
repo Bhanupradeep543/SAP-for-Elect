@@ -168,98 +168,98 @@ if selected:
   st.write(df)
    
   data3=data2[data2['Description'].str.contains('nts|NTS|Nts|MODULE|module|Module|brkr|BREAKER|Breaker|bkr|FUSES|fuses|Fuses')]
-  data3["Year"] = data3['Notif.date'].dt.year
+  data3["Year"] = data3['Basic start date'].dt.year
   st.write("no.of NTS/module related in the selected stage",data3.shape[0])
-  yearly_count = data3.groupby("Year")['Notif.date'].count().reset_index()
-  yearly_count.rename(columns={'Notif.date': "NTS/ module related"}, inplace=True)
+  yearly_count = data3.groupby("Year")['Basic start date'].count().reset_index()
+  yearly_count.rename(columns={'Basic start date': "NTS/ module related"}, inplace=True)
   st.subheader("📅 Year-wise NTS/ module related")
   st.bar_chart(data=yearly_count, x="Year", y="NTS/ module related")      
      
   data4=data2[data2['Description'].str.contains('Vibration|vibration|VIBRATION|vib|VIB')]
-  data4["Year"] = data4['Notif.date'].dt.year
+  data4["Year"] = data4['Basic start date'].dt.year
   st.write("no.of vibrational issues in the selected stage",data4.shape[0])
-  yearly_count = data4.groupby("Year")['Notif.date'].count().reset_index()
-  yearly_count.rename(columns={'Notif.date': "vibrational issues"}, inplace=True)
+  yearly_count = data4.groupby("Year")['Basic start date'].count().reset_index()
+  yearly_count.rename(columns={'Basic start date': "vibrational issues"}, inplace=True)
   st.subheader("📅 Year-wise vibrational issues")
   st.bar_chart(data=yearly_count, x="Year", y="vibrational issues")    
    
   data5=data2[data2['Description'].str.contains('sound|SOUND|Sound|bearing|BEARING|Bearing|brng|BRNG|thrust|THRUST|Thrust')]
-  data5["Year"] = data5['Notif.date'].dt.year
+  data5["Year"] = data5['Basic start date'].dt.year
   st.write("no.of bearing/coupling issues in the selected stage",data5.shape[0])
-  yearly_count = data5.groupby("Year")['Notif.date'].count().reset_index()
-  yearly_count.rename(columns={'Notif.date': "bearing/coupling issues"}, inplace=True)
+  yearly_count = data5.groupby("Year")['Basic start date'].count().reset_index()
+  yearly_count.rename(columns={'Basic start date': "bearing/coupling issues"}, inplace=True)
   st.subheader("📅 Year-wise bearing/coupling issues")
   st.bar_chart(data=yearly_count, x="Year", y="bearing/coupling issues") 
      
   data6=data2[data2['Description'].str.contains('nrv|NRV|Nrv')]
-  data6["Year"] = data6['Notif.date'].dt.year
+  data6["Year"] = data6['Basic start date'].dt.year
   st.write("no.of NRV passing issues in the selected stage",data6.shape[0])
-  yearly_count = data6.groupby("Year")['Notif.date'].count().reset_index()
-  yearly_count.rename(columns={'Notif.date': "NRV passing"}, inplace=True)
+  yearly_count = data6.groupby("Year")['Basic start date'].count().reset_index()
+  yearly_count.rename(columns={'Basic start date': "NRV passing"}, inplace=True)
   st.subheader("📅 Year-wise NRV passings")
   st.bar_chart(data=yearly_count, x="Year", y="NRV passing")
  
   data7=data2[data2['Description'].str.contains('valve|VALVE|vlv|VLV|Valve|v/v|BFV|bfv')]
-  data7["Year"] = data7['Notif.date'].dt.year
+  data7["Year"] = data7['NBasic start date'].dt.year
   st.write("no.of valve issues in the selected stage",data7.shape[0])
-  yearly_count = data7.groupby("Year")['Notif.date'].count().reset_index()
+  yearly_count = data7.groupby("Year")['Basic start date'].count().reset_index()
   yearly_count.rename(columns={'Notif.date': "Valve issues"}, inplace=True)
   st.subheader("📅 Year-wise Valve issues")
   st.bar_chart(data=yearly_count, x="Year", y="Valve issues")
 
   data8=data2[data2['Description'].str.contains('oil|OIL|Oil')]
-  data8["Year"] = data8['Notif.date'].dt.year
+  data8["Year"] = data8['Basic start date'].dt.year
   st.write("no.of oil leak/ oil top up issues in the selected stage",data8.shape[0])
-  yearly_count = data8.groupby("Year")['Notif.date'].count().reset_index()
-  yearly_count.rename(columns={'Notif.date': "Oil leaks/ oil top up issues"}, inplace=True)
+  yearly_count = data8.groupby("Year")['Basic start date'].count().reset_index()
+  yearly_count.rename(columns={'Basic start date': "Oil leaks/ oil top up issues"}, inplace=True)
   st.subheader("📅 Year-wise Oil leaks/ oil top up issues")
   st.bar_chart(data=yearly_count, x="Year", y="Oil leaks/ oil top up issues")
 
   data9=data2[data2['Description'].str.contains('F/B|TX|SWITCH|gauge|DCS|tx|Display|display|BAD|panel|PANNEL|hunt|HUNT|Tx|guage|switch')]
-  data9["Year"] = data9['Notif.date'].dt.year
+  data9["Year"] = data9['Basic start date'].dt.year
   st.write("no.of C&I instruments/feedback related issues in the selected stage",data9.shape[0])
-  yearly_count = data9.groupby("Year")['Notif.date'].count().reset_index()
-  yearly_count.rename(columns={'Notif.date': "C&I instruments/feedback relateds"}, inplace=True)
+  yearly_count = data9.groupby("Year")['Basic start date'].count().reset_index()
+  yearly_count.rename(columns={'Basic start date': "C&I instruments/feedback relateds"}, inplace=True)
   st.subheader("📅 Year-wise C&I instruments/feedback related issues")
   st.bar_chart(data=yearly_count, x="Year", y="C&I instruments/feedback related")
      
   data10=data2[data2['Description'].str.contains('pipe|PIPE|LINE|Line|line|Pipe|hdr|HDR|header|HEADER')]
-  data10["Year"] = data10['Notif.date'].dt.year
+  data10["Year"] = data10['Basic start date'].dt.year
   st.write("no.of Pipe leakage issues in the selected stage",data10.shape[0])
-  yearly_count = data9.groupby("Year")['Notif.date'].count().reset_index()
-  yearly_count.rename(columns={'Notif.date': "Pipe leakage issues"}, inplace=True)
+  yearly_count = data9.groupby("Year")['Basic start date'].count().reset_index()
+  yearly_count.rename(columns={'Basic start date': "Pipe leakage issues"}, inplace=True)
   st.subheader("📅 Year-wise Pipe leakage issues")
   st.bar_chart(data=yearly_count, x="Year", y="Pipe leakage issues")
   
   data11=data2[data2['Description'].str.contains('overload|OVERLOAD|OL|Overload|O/L|o/l|current|CURRENT|Current|curren')]
-  data11["Year"] = data11['Notif.date'].dt.year
+  data11["Year"] = data11['Basic start date'].dt.year
   st.write("no.of Over loading/ tripping issues in the selected stage",data11.shape[0])
-  yearly_count = data11.groupby("Year")['Notif.date'].count().reset_index()
-  yearly_count.rename(columns={'Notif.date': "Over loading/ tripping issues"}, inplace=True)
+  yearly_count = data11.groupby("Year")['Basic start date'].count().reset_index()
+  yearly_count.rename(columns={'Basic start date': "Over loading/ tripping issues"}, inplace=True)
   st.subheader("📅 Year-wise Over loading/ tripping issues")
   st.bar_chart(data=yearly_count, x="Year", y="Over loading/ tripping issues")
 
   data12=data2[data2['Description'].str.contains('pr low|PR LOW|DEVELOP|develop|Develop|pressure|PRESSURE|devlp')]
-  data12["Year"] = data12['Notif.date'].dt.year
+  data12["Year"] = data12['Basic start date'].dt.year
   st.write("no.of Pressure Related Issues in the selected stage",data12.shape[0])
-  yearly_count = data12.groupby("Year")['Notif.date'].count().reset_index()
-  yearly_count.rename(columns={'Notif.date': "Pressure Related Issues"}, inplace=True)
+  yearly_count = data12.groupby("Year")['Basic start date'].count().reset_index()
+  yearly_count.rename(columns={'Basic start date': "Pressure Related Issues"}, inplace=True)
   st.subheader("📅 Year-wise Pressure Related Issues")
   st.bar_chart(data=yearly_count, x="Year", y="Pressure Related Issues")
 
   data13=data2[data2['Description'].str.contains('CHOKE|choke|Choke')]
-  data13["Year"] = data13['Notif.date'].dt.year
+  data13["Year"] = data13['Basic start date'].dt.year
   st.write("no.of Line/ CT Nozzles chokage issues in the selected stage",data13.shape[0])
-  yearly_count = data13.groupby("Year")['Notif.date'].count().reset_index()
-  yearly_count.rename(columns={'Notif.date': "Line/ CT Nozzles chokage issues"}, inplace=True)
+  yearly_count = data13.groupby("Year")['Basic start date'].count().reset_index()
+  yearly_count.rename(columns={'Basic start date': "Line/ CT Nozzles chokage issues"}, inplace=True)
   st.subheader("📅 Year-wise Line/ CT Nozzles chokage issues")
   st.bar_chart(data=yearly_count, x="Year", y="Line/ CT Nozzles chokage issues")
 
   data14=data2[data2['Description'].str.contains('JAM|jam')]
-  data14["Year"] = data14['Notif.date'].dt.year
+  data14["Year"] = data14['Basic start date'].dt.year
   st.write("no.of valve/pump/gearbox jamming issues in the selected stage",data14.shape[0])
-  yearly_count = data13.groupby("Year")['Notif.date'].count().reset_index()
-  yearly_count.rename(columns={'Notif.date': "valve/pump/gearbox jamming issues"}, inplace=True)
+  yearly_count = data13.groupby("Year")['Basic start date'].count().reset_index()
+  yearly_count.rename(columns={'Basic start date': "valve/pump/gearbox jamming issues"}, inplace=True)
   st.subheader("📅 Year-wise valve/pump/gearbox jamming issues")
   st.bar_chart(data=yearly_count, x="Year", y="valve/pump/gearbox jamming issues")
   
