@@ -17,7 +17,6 @@ uploaded_file = st.file_uploader("Upload your defect data (Excel/CSV)",type=["xl
 data = pd.read_excel(uploaded_file)
 st.success("File loaded successfully")
 data['Notif.date'] = pd.to_datetime(data['Notif.date'], format='%Y%m%d')
-data1 = data[data['Main WorkCtr'] == 'M400CWCT']
 st.subheader('Total SAP notifications considered for analysis')
 st.subheader(data1.shape[0])
 st.subheader('Top 20 Repeated equipment notifications')
