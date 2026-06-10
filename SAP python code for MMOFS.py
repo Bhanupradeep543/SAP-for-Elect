@@ -71,7 +71,7 @@ stage_summary = []
 # Loop through all stages automatically
 for stage_name, keyword in keywords.items():
     # Filter stage-wise data
-    data2 = data[data['Functional Loc.'].astype(str).str.contains(keyword, na=False)]
+    data2 = data[data['Functional Location'].astype(str).str.contains(keyword, na=False)]
     # Total defects in that stage
     total_defects = data2.shape[0]
     # Append results
