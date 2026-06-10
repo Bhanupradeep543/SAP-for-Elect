@@ -13,9 +13,7 @@ import random
 import base64
 import re
 st.title("NTPC SAP Notifications Analysis")
-uploaded_file = st.file_uploader("Upload your defect data (Excel/CSV)",type=["xlsx", "xls", "csv"])
-data = pd.read_excel(uploaded_file)
-st.success("File loaded successfully")
+data = pd.read_excel("Electrical data.xlsx")
 data['Basic start date'] = pd.to_datetime(data['Basic start date'], format='%Y%m%d')
 st.subheader('Total SAP notifications considered for analysis')
 st.subheader(data.shape[0])
