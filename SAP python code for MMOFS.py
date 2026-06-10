@@ -200,7 +200,7 @@ if selected:
   st.bar_chart(data=yearly_count, x="Year", y="NRV passing")
  
   data7=data2[data2['Description'].str.contains('valve|VALVE|vlv|VLV|Valve|v/v|BFV|bfv')]
-  data7["Year"] = data7['NBasic start date'].dt.year
+  data7["Year"] = data7['Basic start date'].dt.year
   st.write("no.of valve issues in the selected stage",data7.shape[0])
   yearly_count = data7.groupby("Year")['Basic start date'].count().reset_index()
   yearly_count.rename(columns={'Notif.date': "Valve issues"}, inplace=True)
