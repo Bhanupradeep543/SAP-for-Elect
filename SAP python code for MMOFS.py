@@ -269,7 +269,7 @@ if selected:
   per=int(per)
   st.write("% of notifications divided into various categories",per)
      
-  date_col = "Notif.date"
+  date_col = "Basic start date"
   equip_col = "equipment"
   # Convert to datetime
   data2[date_col] = pd.to_datetime(data2[date_col], errors='coerce')
