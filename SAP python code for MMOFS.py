@@ -115,7 +115,7 @@ defect_patterns = {
     "Oil Leakage": r"oil|OIL|Oil",
     "Reverse Rotation/Decoupled": r"reverse|REVERSE|Reverse|Decouple|decouple|DECOUPLE",
     "Pipe Leakages": r"pipe|PIPE|LINE|Line|line|Pipe|hdr|HDR|header|HEADER",
-    "Overloading/Tripping": r"overload|OVERLOAD|OL|Overload|O/L|o/l|current|CURRENT|Current|curren",
+    "Overloading/Tripping": r"overload|OVERLOAD|overload|TRIP|trip|Trip|OL|Overload|O/L|o/l|current|CURRENT|Current|curren",
     "Pump Pressure Issues": r"pr low|PR LOW|DEVELOP|develop|Develop|pressure|PRESSURE|devlp",
     "Choking Issues": r"CHOKE|choke|Choke",
     "Jamming Issues": r"JAM|jam"
