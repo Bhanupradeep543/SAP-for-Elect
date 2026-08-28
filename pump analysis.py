@@ -10,84 +10,43 @@ files=st.file_uploader("Upload Plant Notification Excel Files",type=["xlsx"],acc
 plant_data={}
 
 if files:
-    st.subheader("Enter Plant Names")
-
+    st.subheader("Plant Names")
     for i,file in enumerate(files):
         plant=st.text_input(f"Enter Plant Name for {file.name}",key=f"plant_{i}")
-
         if plant:
             df=pd.read_excel(file)
-
             if "Functional Loc." not in df.columns:
                 st.error(f"'Functional Loc.' column not found in {file.name}")
                 continue
-
-            df["System"]=df["Functional Loc."].astype(str).str.upper().apply(
-                lambda x:"CW System" if "CWS" in x else
-                ("CT System" if "CLT" in x else "Others")
-            )
-
+            df["System"]=df["Functional Loc."].astype(str).str.upper().apply(lambda x:"CW System" if "CWS" in x else ("CT System" if "CLT" in x else "Other"))
             df["Plant"]=plant
             plant_data[plant]=df
 
     if plant_data:
-
         data=pd.concat(plant_data.values(),ignore_index=True)
 
-        # Plant-wise System Summary
-        summary=data.groupby(["Plant","System"]).size().unstack(fill_value=0).reset_index()
-
-        # Ensure all required columns are available
-        for col in ["CW System","CT System","Others"]:
-            if col not in summary.columns:
-                summary[col]=0
-
-        # Arrange columns in required order
-        summary=summary[["Plant","CW System","CT System","Others"]]
-
-        # Add S.No
-        summary.insert(0,"S.No",range(1,len(summary)+1))
-
-        st.subheader("Plant-wise System Notification Summary")
-
-        st.dataframe(
-            summary,
-            use_container_width=True,
-            hide_index=True
-        )
-
-        # Overall totals
-        st.subheader("Overall System Summary")
+        st.subheader("Plant & System Wise Dashboard")
 
         c1,c2,c3=st.columns(3)
+        c1.metric("Total Notifications",len(data))
+        c2.metric("CW System",len(data[data["System"]=="CW System"]))
+        c3.metric("CT System",len(data[data["System"]=="CT System"]))
 
-        c1.metric("CW System",int(data[data["System"]=="CW System"].shape[0]))
-        c2.metric("CT System",int(data[data["System"]=="CT System"].shape[0]))
-        c3.metric("Others",int(data[data["System"]=="Others"].shape[0]))
+        summary=data.groupby(["Plant","System"]).size().reset_index(name="Notifications")
 
-        # Chart
-        chart_data=summary.melt(
-            id_vars=["S.No","Plant"],
-            value_vars=["CW System","CT System","Others"],
-            var_name="System",
-            value_name="Notifications"
-        )
+        st.subheader("Plant-wise System Summary")
+        st.dataframe(summary,use_container_width=True)
 
-        fig=px.bar(
-            chart_data,
-            x="Plant",
-            y="Notifications",
-            color="System",
-            barmode="group",
-            text="Notifications"
-        )
-
-        fig.update_traces(textposition="outside")
-
-        fig.update_layout(
-            xaxis_title="Plant",
-            yaxis_title="Number of Notifications",
-            legend_title="System"
-        )
-
+        fig=px.bar(summary,x="Plant",y="Notifications",color="System",barmode="group",text="Notifications")
         st.plotly_chart(fig,use_container_width=True)
+
+        st.subheader("System-wise Plant Comparison")
+        system_summary=data[data["System"].isin(["CW System","CT System"])].groupby(["System","Plant"]).size().reset_index(name="Notifications")
+
+        fig2=px.bar(system_summary,x="Plant",y="Notifications",color="System",barmode="group",text="Notifications")
+        st.plotly_chart(fig2,use_container_width=True)
+
+        st.subheader("System Distribution")
+        system_count=data[data["System"].isin(["CW System","CT System"])].groupby("System").size().reset_index(name="Notifications")
+        fig3=px.pie(system_count,names="System",values="Notifications",hole=0.4)
+        st.plotly_chart(fig3,use_container_width=True)
