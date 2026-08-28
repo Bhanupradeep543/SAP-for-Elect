@@ -22,10 +22,17 @@ if files:
                 st.error(f"'Functional Loc.' column not found in {file.name}")
                 continue
 
+            if "Notif.date" not in df.columns:
+                st.error(f"'Notif.date' column not found in {file.name}")
+                continue
+
             floc=df["Functional Loc."].fillna("").astype("string").str.upper()
             df["System"]="Others"
             df.loc[floc.str.contains("CWS",na=False),"System"]="CW System"
             df.loc[floc.str.contains("CLT",na=False),"System"]="CT System"
+
+            df["Notif.date"]=pd.to_datetime(df["Notif.date"],errors="coerce")
+            df["Year"]=df["Notif.date"].dt.year
             df["Plant"]=plant
 
             plant_data[plant]=df
@@ -34,6 +41,7 @@ if files:
 
         data=pd.concat(plant_data.values(),ignore_index=True)
 
+        # Plant-wise system summary
         summary=data.groupby(["Plant","System"]).size().unstack(fill_value=0).reset_index()
 
         for col in ["CW System","CT System","Others"]:
@@ -44,36 +52,53 @@ if files:
         summary.insert(0,"S.No",range(1,len(summary)+1))
 
         st.subheader("Plant-wise System Notification Summary")
-
         st.dataframe(summary,use_container_width=True,hide_index=True)
 
-        c1,c2,c3=st.columns(3)
+        # Plant selection
+        st.subheader("Detailed Plant Analysis")
 
-        c1.metric("CW System",int(data["System"].eq("CW System").sum()))
-        c2.metric("CT System",int(data["System"].eq("CT System").sum()))
-        c3.metric("Others",int(data["System"].eq("Others").sum()))
+        selected_plant=st.selectbox("Select Plant for Year-wise Trend",summary["Plant"].tolist())
 
-        chart_data=summary.melt(
-            id_vars=["S.No","Plant"],
-            value_vars=["CW System","CT System","Others"],
-            var_name="System",
-            value_name="Notifications"
-        )
+        if selected_plant:
 
-        fig=px.bar(
-            chart_data,
-            x="Plant",
-            y="Notifications",
-            color="System",
-            barmode="group",
-            text="Notifications"
-        )
+            plant_df=data[data["Plant"]==selected_plant].copy()
 
-        fig.update_traces(textposition="outside")
-        fig.update_layout(
-            xaxis_title="Plant",
-            yaxis_title="Number of Notifications",
-            legend_title="System"
-        )
+            trend=plant_df.groupby(["Year","System"]).size().unstack(fill_value=0).reset_index()
 
-        st.plotly_chart(fig,use_container_width=True)
+            for col in ["CW System","CT System","Others"]:
+                if col not in trend.columns:
+                    trend[col]=0
+
+            trend=trend[["Year","CW System","CT System","Others"]]
+            trend=trend.dropna(subset=["Year"])
+            trend["Year"]=trend["Year"].astype(int)
+
+            st.subheader(f"{selected_plant} - Year-wise System Trend")
+
+            st.dataframe(trend,use_container_width=True,hide_index=True)
+
+            trend_chart=trend.melt(
+                id_vars="Year",
+                value_vars=["CW System","CT System","Others"],
+                var_name="System",
+                value_name="Notifications"
+            )
+
+            fig=px.line(
+                trend_chart,
+                x="Year",
+                y="Notifications",
+                color="System",
+                markers=True,
+                text="Notifications"
+            )
+
+            fig.update_traces(textposition="top center")
+            fig.update_layout(
+                xaxis_title="Year",
+                yaxis_title="Number of Notifications",
+                legend_title="System",
+                xaxis=dict(dtick=1)
+            )
+
+            st.plotly_chart(fig,use_container_width=True)
