@@ -22,50 +22,37 @@ if files:
                 st.error(f"'Functional Loc.' column not found in {file.name}")
                 continue
 
-            df["System"]=df["Functional Loc."].astype(str).str.upper().apply(
-                lambda x:"CW System" if "CWS" in x else
-                ("CT System" if "CLT" in x else "Others")
-            )
-
+            floc=df["Functional Loc."].fillna("").astype("string").str.upper()
+            df["System"]="Others"
+            df.loc[floc.str.contains("CWS",na=False),"System"]="CW System"
+            df.loc[floc.str.contains("CLT",na=False),"System"]="CT System"
             df["Plant"]=plant
+
             plant_data[plant]=df
 
     if plant_data:
 
         data=pd.concat(plant_data.values(),ignore_index=True)
 
-        # Plant-wise System Summary
         summary=data.groupby(["Plant","System"]).size().unstack(fill_value=0).reset_index()
 
-        # Ensure all required columns are available
         for col in ["CW System","CT System","Others"]:
             if col not in summary.columns:
                 summary[col]=0
 
-        # Arrange columns in required order
         summary=summary[["Plant","CW System","CT System","Others"]]
-
-        # Add S.No
         summary.insert(0,"S.No",range(1,len(summary)+1))
 
         st.subheader("Plant-wise System Notification Summary")
 
-        st.dataframe(
-            summary,
-            use_container_width=True,
-            hide_index=True
-        )
-
-        # Overall totals
-        st.subheader("Overall System Summary")
+        st.dataframe(summary,use_container_width=True,hide_index=True)
 
         c1,c2,c3=st.columns(3)
 
-        c1.metric("CW System",int(data[data["System"]=="CW System"].shape[0]))
-        c2.metric("CT System",int(data[data["System"]=="CT System"].shape[0]))
-        c3.metric("Others",int(data[data["System"]=="Others"].shape[0]))
+        c1.metric("CW System",int(data["System"].eq("CW System").sum()))
+        c2.metric("CT System",int(data["System"].eq("CT System").sum()))
+        c3.metric("Others",int(data["System"].eq("Others").sum()))
 
-        # Chart
         chart_data=summary.melt(
             id_vars=["S.No","Plant"],
             value_vars=["CW System","CT System","Others"],
@@ -83,7 +70,6 @@ if files:
         )
 
         fig.update_traces(textposition="outside")
-
         fig.update_layout(
             xaxis_title="Plant",
             yaxis_title="Number of Notifications",
