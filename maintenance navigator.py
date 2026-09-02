@@ -12,24 +12,44 @@ IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ============================================================
-# DATABASE
+# DATABASE CONNECTION
 # ============================================================
 
 def get_connection():
     return sqlite3.connect(DB_FILE, check_same_thread=False)
 
 
+# ============================================================
+# DATABASE INITIALIZATION
+# ============================================================
+
 def initialize_database():
 
     conn = get_connection()
     cursor = conn.cursor()
 
+    # --------------------------------------------------------
+    # Equipment Master
+    # --------------------------------------------------------
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS equipment_master (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            equipment_name TEXT UNIQUE NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # --------------------------------------------------------
+    # Maintenance Records
+    # --------------------------------------------------------
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS maintenance_records (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            maintenance_date TEXT NOT NULL,
-            stage TEXT NOT NULL,
-            equipment_name TEXT NOT NULL,
+            maintenance_date TEXT,
+            stage TEXT,
+            equipment_name TEXT,
             order_number TEXT,
             work_carried_out TEXT,
             materials_consumed TEXT,
@@ -37,6 +57,10 @@ def initialize_database():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+
+    # --------------------------------------------------------
+    # SAP Notifications
+    # --------------------------------------------------------
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS sap_notifications (
@@ -50,12 +74,18 @@ def initialize_database():
 
     conn.commit()
 
-    # --------------------------------------------------------
-    # Migration for old maintenance database
-    # --------------------------------------------------------
+    # ========================================================
+    # MIGRATE OLD MAINTENANCE TABLE
+    # ========================================================
 
-    cursor.execute("PRAGMA table_info(maintenance_records)")
-    maintenance_columns = [row[1] for row in cursor.fetchall()]
+    cursor.execute(
+        "PRAGMA table_info(maintenance_records)"
+    )
+
+    maintenance_columns = [
+        row[1]
+        for row in cursor.fetchall()
+    ]
 
     required_maintenance_columns = {
         "maintenance_date": "TEXT",
@@ -72,17 +102,26 @@ def initialize_database():
         if column not in maintenance_columns:
 
             cursor.execute(
-                f"ALTER TABLE maintenance_records ADD COLUMN {column} {data_type}"
+                f"""
+                ALTER TABLE maintenance_records
+                ADD COLUMN {column} {data_type}
+                """
             )
 
     conn.commit()
 
-    # --------------------------------------------------------
-    # Migration for old SAP database
-    # --------------------------------------------------------
+    # ========================================================
+    # MIGRATE OLD SAP TABLE
+    # ========================================================
 
-    cursor.execute("PRAGMA table_info(sap_notifications)")
-    sap_columns = [row[1] for row in cursor.fetchall()]
+    cursor.execute(
+        "PRAGMA table_info(sap_notifications)"
+    )
+
+    sap_columns = [
+        row[1]
+        for row in cursor.fetchall()
+    ]
 
     required_sap_columns = {
         "notification_date": "TEXT",
@@ -95,15 +134,51 @@ def initialize_database():
         if column not in sap_columns:
 
             cursor.execute(
-                f"ALTER TABLE sap_notifications ADD COLUMN {column} {data_type}"
+                f"""
+                ALTER TABLE sap_notifications
+                ADD COLUMN {column} {data_type}
+                """
             )
+
+    conn.commit()
+
+    # ========================================================
+    # RECOVER EQUIPMENT FROM OLD SAP DATA
+    # ========================================================
+
+    cursor.execute("""
+        SELECT DISTINCT TRIM(equipment_name)
+        FROM sap_notifications
+        WHERE equipment_name IS NOT NULL
+        AND TRIM(equipment_name) != ''
+    """)
+
+    old_equipment = [
+        row[0]
+        for row in cursor.fetchall()
+        if row[0]
+    ]
+
+    for equipment in old_equipment:
+
+        try:
+
+            cursor.execute("""
+                INSERT OR IGNORE INTO equipment_master
+                (equipment_name)
+                VALUES (?)
+            """, (equipment,))
+
+        except Exception:
+
+            pass
 
     conn.commit()
     conn.close()
 
 
 # ============================================================
-# EQUIPMENT LIST
+# EQUIPMENT MASTER - GET
 # ============================================================
 
 def get_equipment_list():
@@ -113,12 +188,11 @@ def get_equipment_list():
     cursor = conn.cursor()
 
     cursor.execute("""
-        SELECT DISTINCT
-            TRIM(equipment_name)
-        FROM sap_notifications
+        SELECT equipment_name
+        FROM equipment_master
         WHERE equipment_name IS NOT NULL
         AND TRIM(equipment_name) != ''
-        ORDER BY TRIM(equipment_name)
+        ORDER BY equipment_name
     """)
 
     equipment_list = [
@@ -130,6 +204,58 @@ def get_equipment_list():
     conn.close()
 
     return equipment_list
+
+
+# ============================================================
+# EQUIPMENT MASTER - SAVE
+# ============================================================
+
+def save_equipment_master(equipment_list, replace_existing=False):
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    if replace_existing:
+
+        cursor.execute(
+            "DELETE FROM equipment_master"
+        )
+
+    saved_count = 0
+
+    for equipment in equipment_list:
+
+        equipment = str(
+            equipment
+        ).strip()
+
+        if (
+            not equipment
+            or equipment.lower() == "nan"
+        ):
+
+            continue
+
+        try:
+
+            cursor.execute("""
+                INSERT OR IGNORE INTO equipment_master
+                (equipment_name)
+                VALUES (?)
+            """, (equipment,))
+
+            if cursor.rowcount > 0:
+
+                saved_count += 1
+
+        except Exception:
+
+            pass
+
+    conn.commit()
+    conn.close()
+
+    return saved_count
 
 
 # ============================================================
@@ -177,13 +303,12 @@ def save_record(
 
 
 # ============================================================
-# SAVE SAP DATA
+# SAVE SAP NOTIFICATIONS
 # ============================================================
 
 def save_sap_data(df, replace_existing=False):
 
     conn = get_connection()
-
     cursor = conn.cursor()
 
     if replace_existing:
@@ -215,23 +340,13 @@ def save_sap_data(df, replace_existing=False):
 
             continue
 
-        if (
-            notification_date.lower()
-            == "nan"
-        ):
+        if notification_date.lower() == "nan":
 
             notification_date = ""
 
-        if (
-            description.lower()
-            == "nan"
-        ):
+        if description.lower() == "nan":
 
             description = ""
-
-        # ----------------------------------------------------
-        # Prevent exact duplicate rows
-        # ----------------------------------------------------
 
         cursor.execute("""
             SELECT COUNT(*)
@@ -245,9 +360,9 @@ def save_sap_data(df, replace_existing=False):
             description
         ))
 
-        duplicate = cursor.fetchone()[0]
+        exists = cursor.fetchone()[0]
 
-        if duplicate == 0:
+        if exists == 0:
 
             cursor.execute("""
                 INSERT INTO sap_notifications
@@ -279,7 +394,9 @@ def find_column(df, keyword):
 
     for column in df.columns:
 
-        if keyword.lower() in str(column).strip().lower():
+        if keyword.lower() in str(
+            column
+        ).strip().lower():
 
             return column
 
@@ -304,7 +421,9 @@ def get_equipment_history(equipment_name):
             materials_consumed AS 'Materials Consumed',
             image_path AS Image
         FROM maintenance_records
-        WHERE TRIM(equipment_name) = TRIM(?)
+        WHERE UPPER(TRIM(equipment_name))
+              =
+              UPPER(TRIM(?))
         ORDER BY maintenance_date DESC, id DESC
     """, conn, params=(equipment_name,))
 
@@ -326,7 +445,9 @@ def get_equipment_notifications(equipment_name):
             notification_date AS Date,
             description AS Notification
         FROM sap_notifications
-        WHERE TRIM(equipment_name) = TRIM(?)
+        WHERE UPPER(TRIM(equipment_name))
+              =
+              UPPER(TRIM(?))
         ORDER BY notification_date DESC, id DESC
     """, conn, params=(equipment_name,))
 
@@ -384,7 +505,7 @@ def get_all_notifications():
 
 
 # ============================================================
-# IMAGE SAVE
+# SAVE IMAGES
 # ============================================================
 
 def save_uploaded_images(
@@ -433,7 +554,7 @@ def save_uploaded_images(
 
 
 # ============================================================
-# MATERIAL PARSER
+# PARSE MATERIALS
 # ============================================================
 
 def parse_materials(material_string):
@@ -448,7 +569,7 @@ def parse_materials(material_string):
             material_string
         )
 
-    except:
+    except Exception:
 
         return []
 
@@ -475,7 +596,9 @@ st.set_page_config(
 # TITLE
 # ============================================================
 
-st.title("🔧 Maintenance Navigator")
+st.title(
+    "🔧 Maintenance Navigator"
+)
 
 st.caption(
     "Maintenance Engineer Decision Support System"
@@ -500,7 +623,9 @@ tab1, tab2, tab3, tab4 = st.tabs([
 
 with tab1:
 
-    st.header("📝 Maintenance Entry")
+    st.header(
+        "📝 Maintenance Entry"
+    )
 
     equipment_list = get_equipment_list()
 
@@ -558,9 +683,9 @@ with tab1:
 
         st.divider()
 
-        # ----------------------------------------------------
+        # ====================================================
         # MATERIALS
-        # ----------------------------------------------------
+        # ====================================================
 
         st.subheader(
             "🔩 Materials Consumed"
@@ -577,7 +702,9 @@ with tab1:
             ]
 
         for i in range(
-            len(st.session_state.materials)
+            len(
+                st.session_state.materials
+            )
         ):
 
             col1, col2, col3, col4 = st.columns(
@@ -593,8 +720,7 @@ with tab1:
                     value=st.session_state.materials[i][
                         "material"
                     ],
-                    key=f"material_{i}",
-                    placeholder="Material"
+                    key=f"material_{i}"
                 )
 
             with col2:
@@ -606,8 +732,7 @@ with tab1:
                     value=st.session_state.materials[i][
                         "uom"
                     ],
-                    key=f"uom_{i}",
-                    placeholder="UOM"
+                    key=f"uom_{i}"
                 )
 
             with col3:
@@ -632,7 +757,7 @@ with tab1:
 
                     if st.button(
                         "❌",
-                        key=f"delete_{i}"
+                        key=f"delete_material_{i}"
                     ):
 
                         st.session_state.materials.pop(
@@ -655,9 +780,9 @@ with tab1:
 
         st.divider()
 
-        # ----------------------------------------------------
+        # ====================================================
         # IMAGES
-        # ----------------------------------------------------
+        # ====================================================
 
         uploaded_images = st.file_uploader(
             "📷 Upload Maintenance Images",
@@ -671,9 +796,9 @@ with tab1:
 
         st.divider()
 
-        # ----------------------------------------------------
-        # SAVE
-        # ----------------------------------------------------
+        # ====================================================
+        # SAVE RECORD
+        # ====================================================
 
         if st.button(
             "💾 Save Maintenance Record",
@@ -699,7 +824,9 @@ with tab1:
 
             valid_materials = []
 
-            for material in st.session_state.materials:
+            for material in (
+                st.session_state.materials
+            ):
 
                 material_name = (
                     material["material"].strip()
@@ -768,7 +895,8 @@ with tab2:
     )
 
     # IMPORTANT:
-    # Read directly from database every rerun
+    # Equipment History reads directly from
+    # equipment_master.
 
     equipment_list = get_equipment_list()
 
@@ -790,9 +918,9 @@ with tab2:
             key="history_equipment"
         )
 
-        # ----------------------------------------------------
+        # ====================================================
         # SAP NOTIFICATION HISTORY
-        # ----------------------------------------------------
+        # ====================================================
 
         st.subheader(
             "🔔 SAP Notification History"
@@ -821,9 +949,9 @@ with tab2:
 
         st.divider()
 
-        # ----------------------------------------------------
-        # MAINTENANCE HISTORY
-        # ----------------------------------------------------
+        # ====================================================
+        # MANUAL MAINTENANCE HISTORY
+        # ====================================================
 
         st.subheader(
             "🔧 Manual Maintenance History"
@@ -852,9 +980,9 @@ with tab2:
                 hide_index=True
             )
 
-        # ----------------------------------------------------
+        # ====================================================
         # MATERIAL HISTORY
-        # ----------------------------------------------------
+        # ====================================================
 
         if not maintenance_history.empty:
 
@@ -880,8 +1008,8 @@ with tab2:
 
                     st.markdown(
                         f"**Date:** {row['Date']} "
-                        f" | "
-                        f"**Order:** {row['Order Number']}"
+                        f"| **Order:** "
+                        f"{row['Order Number']}"
                     )
 
                     material_df = pd.DataFrame(
@@ -900,9 +1028,9 @@ with tab2:
                     "No material consumption recorded."
                 )
 
-        # ----------------------------------------------------
+        # ====================================================
         # IMAGES
-        # ----------------------------------------------------
+        # ====================================================
 
         if not maintenance_history.empty:
 
@@ -1066,8 +1194,8 @@ with tab4:
 
     st.info(
         "Upload the SAP Excel file. "
-        "The application will automatically identify "
-        "Equipment, Description and Date columns."
+        "Equipment, Description and Date columns "
+        "are detected automatically."
     )
 
     uploaded_sap_file = st.file_uploader(
@@ -1081,23 +1209,35 @@ with tab4:
 
     if uploaded_sap_file:
 
+        # ====================================================
+        # READ EXCEL
+        # ====================================================
+
         try:
 
             sap_df = pd.read_excel(
                 uploaded_sap_file
             )
 
-        except Exception:
+        except Exception as error:
 
             st.error(
-                "Unable to read the Excel file."
+                f"Unable to read Excel file: {error}"
             )
 
             st.stop()
 
-        # ----------------------------------------------------
-        # AUTOMATICALLY FIND REQUIRED COLUMNS
-        # ----------------------------------------------------
+        if sap_df.empty:
+
+            st.error(
+                "The Excel file contains no data."
+            )
+
+            st.stop()
+
+        # ====================================================
+        # DETECT COLUMNS
+        # ====================================================
 
         equipment_column = find_column(
             sap_df,
@@ -1114,10 +1254,15 @@ with tab4:
             "date"
         )
 
+        # ====================================================
+        # VALIDATE
+        # ====================================================
+
         if equipment_column is None:
 
             st.error(
-                "Equipment column was not found."
+                "No column containing 'Equipment' "
+                "was found in the Excel file."
             )
 
             st.stop()
@@ -1125,7 +1270,8 @@ with tab4:
         if description_column is None:
 
             st.error(
-                "Description column was not found."
+                "No column containing 'Description' "
+                "was found in the Excel file."
             )
 
             st.stop()
@@ -1133,14 +1279,37 @@ with tab4:
         if date_column is None:
 
             st.error(
-                "Date column was not found."
+                "No column containing 'Date' "
+                "was found in the Excel file."
             )
 
             st.stop()
 
-        # ----------------------------------------------------
-        # CREATE ONLY REQUIRED DATA
-        # ----------------------------------------------------
+        # ====================================================
+        # CREATE REQUIRED DATA
+        # ====================================================
+
+        equipment_series = (
+            sap_df[equipment_column]
+            .fillna("")
+            .astype(str)
+            .str.strip()
+        )
+
+        equipment_series = equipment_series[
+            equipment_series != ""
+        ]
+
+        equipment_series = equipment_series[
+            equipment_series.str.lower()
+            != "nan"
+        ]
+
+        equipment_series = (
+            equipment_series
+            .drop_duplicates()
+            .tolist()
+        )
 
         mapped_df = pd.DataFrame()
 
@@ -1171,8 +1340,6 @@ with tab4:
             .str.strip()
         )
 
-        # Remove invalid equipment rows
-
         mapped_df = mapped_df[
             mapped_df[
                 "equipment_name"
@@ -1182,29 +1349,13 @@ with tab4:
         mapped_df = mapped_df[
             mapped_df[
                 "equipment_name"
-            ].str.lower() != "nan"
+            ].str.lower()
+            != "nan"
         ]
 
-        # ----------------------------------------------------
-        # EQUIPMENT COUNT
-        # ----------------------------------------------------
-
-        unique_equipment = (
-            mapped_df[
-                "equipment_name"
-            ]
-            .drop_duplicates()
-            .tolist()
-        )
-
-        st.success(
-            f"Equipment identified: "
-            f"{len(unique_equipment)}"
-        )
-
-        # ----------------------------------------------------
+        # ====================================================
         # IMPORT MODE
-        # ----------------------------------------------------
+        # ====================================================
 
         import_mode = st.radio(
             "Import Mode",
@@ -1215,9 +1366,18 @@ with tab4:
             horizontal=True
         )
 
-        # ----------------------------------------------------
-        # IMPORT
-        # ----------------------------------------------------
+        # ====================================================
+        # EQUIPMENT COUNT
+        # ====================================================
+
+        st.success(
+            f"🔧 {len(equipment_series)} unique "
+            f"equipments identified."
+        )
+
+        # ====================================================
+        # IMPORT BUTTON
+        # ====================================================
 
         if st.button(
             "📥 Import SAP Excel",
@@ -1231,77 +1391,130 @@ with tab4:
                 "Replace Existing SAP Notifications"
             )
 
-            inserted = save_sap_data(
-                mapped_df,
-                replace_existing
+            # ------------------------------------------------
+            # STEP 1
+            # SAVE EQUIPMENT MASTER FIRST
+            # ------------------------------------------------
+
+            equipment_saved = (
+                save_equipment_master(
+                    equipment_series,
+                    replace_existing
+                )
             )
 
             # ------------------------------------------------
-            # VERIFY DATABASE AFTER IMPORT
+            # STEP 2
+            # SAVE SAP NOTIFICATIONS
+            # ------------------------------------------------
+
+            notification_saved = (
+                save_sap_data(
+                    mapped_df,
+                    replace_existing
+                )
+            )
+
+            # ------------------------------------------------
+            # STEP 3
+            # READ DATABASE AGAIN
             # ------------------------------------------------
 
             updated_equipment_list = (
                 get_equipment_list()
             )
 
+            # ------------------------------------------------
+            # VERIFY
+            # ------------------------------------------------
+
+            if not updated_equipment_list:
+
+                st.error(
+                    "Equipment data could not be saved "
+                    "to the database."
+                )
+
+                st.stop()
+
             st.success(
-                f"✅ SAP data imported successfully."
+                "✅ SAP Excel imported successfully."
             )
 
             st.success(
-                f"🔧 {len(updated_equipment_list)} "
-                f"equipments are now available."
+                f"🔧 Equipment Master contains "
+                f"{len(updated_equipment_list)} equipments."
             )
 
             st.success(
-                f"🔔 {inserted} new notification "
-                f"records added."
+                f"🔔 {notification_saved} SAP "
+                f"notification records added."
             )
 
             st.rerun()
 
-    # --------------------------------------------------------
-    # EXISTING SAP DATABASE
-    # --------------------------------------------------------
+    # ========================================================
+    # CURRENT DATABASE STATUS
+    # ========================================================
 
     st.divider()
-
-    existing_sap = (
-        get_all_notifications()
-    )
 
     current_equipment = (
         get_equipment_list()
     )
 
-    if not existing_sap.empty:
+    current_notifications = (
+        get_all_notifications()
+    )
 
-        col1, col2 = st.columns(2)
+    col1, col2 = st.columns(2)
 
-        with col1:
+    with col1:
 
-            st.metric(
-                "SAP Notifications",
-                len(existing_sap)
-            )
+        st.metric(
+            "Equipment Master",
+            len(current_equipment)
+        )
 
-        with col2:
+    with col2:
 
-            st.metric(
-                "Equipment",
-                len(current_equipment)
-            )
+        st.metric(
+            "SAP Notifications",
+            len(current_notifications)
+        )
 
-        st.dataframe(
-            existing_sap,
-            use_container_width=True,
-            hide_index=True
+    if not current_equipment:
+
+        st.info(
+            "No equipment has been imported yet."
         )
 
     else:
 
-        st.info(
-            "No SAP notification data imported yet."
+        st.subheader(
+            "🔧 Equipment Master"
+        )
+
+        equipment_df = pd.DataFrame({
+            "Equipment": current_equipment
+        })
+
+        st.dataframe(
+            equipment_df,
+            use_container_width=True,
+            hide_index=True
+        )
+
+    if not current_notifications.empty:
+
+        st.subheader(
+            "🔔 SAP Notification History"
+        )
+
+        st.dataframe(
+            current_notifications,
+            use_container_width=True,
+            hide_index=True
         )
 
 
@@ -1315,18 +1528,10 @@ st.sidebar.title(
 
 current_equipment = get_equipment_list()
 
-if current_equipment:
-
-    st.sidebar.success(
-        f"Equipment Master: "
-        f"{len(current_equipment)}"
-    )
-
-else:
-
-    st.sidebar.warning(
-        "Equipment Master Not Loaded"
-    )
+st.sidebar.metric(
+    "Equipment Master",
+    len(current_equipment)
+)
 
 st.sidebar.markdown(
     """
