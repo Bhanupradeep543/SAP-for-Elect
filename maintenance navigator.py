@@ -36,7 +36,7 @@ def get_connection():
 
 
 # ============================================================
-# DATABASE INITIALIZATION / MIGRATION
+# DATABASE INITIALIZATION
 # ============================================================
 
 def initialize_database():
@@ -121,7 +121,7 @@ def initialize_database():
     """)
 
     # --------------------------------------------------------
-    # Spare - Equipment Mapping
+    # Spare Equipment Mapping
     # --------------------------------------------------------
 
     cursor.execute("""
@@ -130,65 +130,109 @@ def initialize_database():
             spare_id INTEGER NOT NULL,
             equipment_name TEXT NOT NULL,
             created_at TEXT,
-            FOREIGN KEY(spare_id) REFERENCES spare_master(id) ON DELETE CASCADE
+            FOREIGN KEY(spare_id) REFERENCES spare_master(id)
+            ON DELETE CASCADE
         )
     """)
 
     # --------------------------------------------------------
-    # Existing DB Migration
+    # Local Observations
     # --------------------------------------------------------
 
-    def get_columns(table_name):
-        cursor.execute(f"PRAGMA table_info({table_name})")
-        return [row[1] for row in cursor.fetchall()]
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS local_observations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            observation_date TEXT,
+            stage TEXT,
+            equipment_name TEXT,
+            defect_description TEXT,
+            severity TEXT,
+            created_at TEXT
+        )
+    """)
 
-    maintenance_columns = get_columns("maintenance_records")
+    # ========================================================
+    # MIGRATION FOR EXISTING DATABASE
+    # ========================================================
+
+    def get_columns(table_name):
+
+        cursor.execute(
+            f"PRAGMA table_info({table_name})"
+        )
+
+        return [
+            row[1]
+            for row in cursor.fetchall()
+        ]
+
+    # --------------------------------------------------------
+    # Maintenance migration
+    # --------------------------------------------------------
+
+    maintenance_columns = get_columns(
+        "maintenance_records"
+    )
 
     if "maintenance_type" not in maintenance_columns:
+
         cursor.execute("""
             ALTER TABLE maintenance_records
             ADD COLUMN maintenance_type TEXT
         """)
 
     if "materials_consumed" not in maintenance_columns:
+
         cursor.execute("""
             ALTER TABLE maintenance_records
             ADD COLUMN materials_consumed TEXT
         """)
 
     if "image_path" not in maintenance_columns:
+
         cursor.execute("""
             ALTER TABLE maintenance_records
             ADD COLUMN image_path TEXT
         """)
 
     if "created_at" not in maintenance_columns:
+
         cursor.execute("""
             ALTER TABLE maintenance_records
             ADD COLUMN created_at TEXT
         """)
 
-    sap_columns = get_columns("sap_notifications")
+    # --------------------------------------------------------
+    # SAP migration
+    # --------------------------------------------------------
+
+    sap_columns = get_columns(
+        "sap_notifications"
+    )
 
     if "notification_date" not in sap_columns:
+
         cursor.execute("""
             ALTER TABLE sap_notifications
             ADD COLUMN notification_date TEXT
         """)
 
     if "equipment_name" not in sap_columns:
+
         cursor.execute("""
             ALTER TABLE sap_notifications
             ADD COLUMN equipment_name TEXT
         """)
 
     if "description" not in sap_columns:
+
         cursor.execute("""
             ALTER TABLE sap_notifications
             ADD COLUMN description TEXT
         """)
 
     if "created_at" not in sap_columns:
+
         cursor.execute("""
             ALTER TABLE sap_notifications
             ADD COLUMN created_at TEXT
@@ -199,6 +243,35 @@ def initialize_database():
 
 
 initialize_database()
+
+
+# ============================================================
+# COMMON FUNCTIONS
+# ============================================================
+
+def clean_text(value):
+
+    if pd.isna(value):
+        return ""
+
+    return str(value).strip()
+
+
+def find_column(df, keyword_list):
+
+    if isinstance(keyword_list, str):
+        keyword_list = [keyword_list]
+
+    for column in df.columns:
+
+        column_text = str(column).strip().lower()
+
+        for keyword in keyword_list:
+
+            if keyword.lower() in column_text:
+                return column
+
+    return None
 
 
 # ============================================================
@@ -220,47 +293,22 @@ def get_equipment_list():
     if df.empty:
         return []
 
-    return df["equipment_name"].dropna().astype(str).tolist()
+    return (
+        df["equipment_name"]
+        .dropna()
+        .astype(str)
+        .tolist()
+    )
 
 
 # ============================================================
-# FIND EXCEL COLUMN
+# SAP IMPORT
 # ============================================================
 
-def find_column(df, keyword_list):
-
-    if isinstance(keyword_list, str):
-        keyword_list = [keyword_list]
-
-    for column in df.columns:
-
-        column_text = str(column).strip().lower()
-
-        for keyword in keyword_list:
-
-            if keyword.lower() in column_text:
-                return column
-
-    return None
-
-
-# ============================================================
-# CLEAN TEXT
-# ============================================================
-
-def clean_text(value):
-
-    if pd.isna(value):
-        return ""
-
-    return str(value).strip()
-
-
-# ============================================================
-# REPLACE EQUIPMENT MASTER + SAP DATA
-# ============================================================
-
-def import_new_sap_data(equipment_list, notification_df):
+def import_new_sap_data(
+    equipment_list,
+    notification_df
+):
 
     conn = get_connection()
 
@@ -269,25 +317,38 @@ def import_new_sap_data(equipment_list, notification_df):
         cursor = conn.cursor()
 
         # ----------------------------------------------------
-        # Replace Equipment Master
+        # Completely replace equipment master
         # ----------------------------------------------------
 
-        cursor.execute("DELETE FROM equipment_master")
+        cursor.execute(
+            "DELETE FROM equipment_master"
+        )
 
         cleaned_equipment = []
 
         for equipment in equipment_list:
 
-            equipment = clean_text(equipment)
+            equipment = clean_text(
+                equipment
+            )
 
-            if equipment and equipment not in cleaned_equipment:
-                cleaned_equipment.append(equipment)
+            if (
+                equipment
+                and equipment not in cleaned_equipment
+            ):
+
+                cleaned_equipment.append(
+                    equipment
+                )
 
         for equipment in cleaned_equipment:
 
             cursor.execute("""
                 INSERT INTO equipment_master
-                (equipment_name, created_at)
+                (
+                    equipment_name,
+                    created_at
+                )
                 VALUES (?, ?)
             """, (
                 equipment,
@@ -295,16 +356,35 @@ def import_new_sap_data(equipment_list, notification_df):
             ))
 
         # ----------------------------------------------------
-        # Replace SAP Notifications
+        # Completely replace SAP notifications
         # ----------------------------------------------------
 
-        cursor.execute("DELETE FROM sap_notifications")
+        cursor.execute(
+            "DELETE FROM sap_notifications"
+        )
 
         for _, row in notification_df.iterrows():
 
-            equipment = clean_text(row.get("equipment_name", ""))
-            notification_date = clean_text(row.get("notification_date", ""))
-            description = clean_text(row.get("description", ""))
+            equipment = clean_text(
+                row.get(
+                    "equipment_name",
+                    ""
+                )
+            )
+
+            notification_date = clean_text(
+                row.get(
+                    "notification_date",
+                    ""
+                )
+            )
+
+            description = clean_text(
+                row.get(
+                    "description",
+                    ""
+                )
+            )
 
             if not equipment:
                 continue
@@ -327,7 +407,10 @@ def import_new_sap_data(equipment_list, notification_df):
 
         conn.commit()
 
-        return len(cleaned_equipment), len(notification_df)
+        return (
+            len(cleaned_equipment),
+            len(notification_df)
+        )
 
     except Exception:
 
@@ -340,7 +423,7 @@ def import_new_sap_data(equipment_list, notification_df):
 
 
 # ============================================================
-# SAVE MAINTENANCE RECORD
+# MAINTENANCE RECORD - SAVE
 # ============================================================
 
 def save_record(
@@ -389,7 +472,7 @@ def save_record(
 
 
 # ============================================================
-# UPDATE MAINTENANCE RECORD
+# MAINTENANCE RECORD - UPDATE
 # ============================================================
 
 def update_maintenance_record(
@@ -437,10 +520,12 @@ def update_maintenance_record(
 
 
 # ============================================================
-# GET SINGLE MAINTENANCE RECORD
+# GET MAINTENANCE RECORD
 # ============================================================
 
-def get_maintenance_record(record_id):
+def get_maintenance_record(
+    record_id
+):
 
     conn = get_connection()
 
@@ -462,7 +547,10 @@ def get_maintenance_record(record_id):
 # SAVE IMAGES
 # ============================================================
 
-def save_uploaded_images(uploaded_files, equipment_name):
+def save_uploaded_images(
+    uploaded_files,
+    equipment_name
+):
 
     if not uploaded_files:
         return []
@@ -473,36 +561,57 @@ def save_uploaded_images(uploaded_files, equipment_name):
         equipment_name
     )
 
-    equipment_folder = IMAGE_DIR / safe_equipment
-    equipment_folder.mkdir(exist_ok=True)
+    equipment_folder = (
+        IMAGE_DIR / safe_equipment
+    )
+
+    equipment_folder.mkdir(
+        exist_ok=True
+    )
 
     saved_paths = []
 
     for uploaded_file in uploaded_files:
 
-        extension = Path(uploaded_file.name).suffix
+        extension = Path(
+            uploaded_file.name
+        ).suffix
 
         file_name = (
-            datetime.now().strftime("%Y%m%d_%H%M%S_")
+            datetime.now().strftime(
+                "%Y%m%d_%H%M%S_"
+            )
             + str(uuid.uuid4())[:8]
             + extension
         )
 
-        file_path = equipment_folder / file_name
+        file_path = (
+            equipment_folder / file_name
+        )
 
-        with open(file_path, "wb") as f:
-            f.write(uploaded_file.getbuffer())
+        with open(
+            file_path,
+            "wb"
+        ) as f:
 
-        saved_paths.append(str(file_path))
+            f.write(
+                uploaded_file.getbuffer()
+            )
+
+        saved_paths.append(
+            str(file_path)
+        )
 
     return saved_paths
 
 
 # ============================================================
-# GET EQUIPMENT HISTORY
+# EQUIPMENT HISTORY
 # ============================================================
 
-def get_equipment_history(equipment_name):
+def get_equipment_history(
+    equipment_name
+):
 
     conn = get_connection()
 
@@ -525,10 +634,12 @@ def get_equipment_history(equipment_name):
 
 
 # ============================================================
-# GET SAP NOTIFICATIONS
+# SAP NOTIFICATIONS
 # ============================================================
 
-def get_equipment_notifications(equipment_name):
+def get_equipment_notifications(
+    equipment_name
+):
 
     conn = get_connection()
 
@@ -547,7 +658,7 @@ def get_equipment_notifications(equipment_name):
 
 
 # ============================================================
-# GET ALL MAINTENANCE RECORDS
+# ALL MAINTENANCE RECORDS
 # ============================================================
 
 def get_all_records():
@@ -573,67 +684,71 @@ def get_all_records():
 
 
 # ============================================================
-# GET ALL SAP NOTIFICATIONS
-# ============================================================
-
-def get_all_notifications():
-
-    conn = get_connection()
-
-    df = pd.read_sql_query("""
-        SELECT
-            notification_date AS Date,
-            equipment_name AS Equipment,
-            description AS Notification
-        FROM sap_notifications
-        ORDER BY notification_date DESC
-    """, conn)
-
-    conn.close()
-
-    return df
-
-
-# ============================================================
-# OH RECORD UPLOAD
+# OH RECORDS
 # ============================================================
 
 def save_oh_records(df):
+
+    equipment_col = find_column(
+        df,
+        ["equipment"]
+    )
+
+    date_col = find_column(
+        df,
+        ["date"]
+    )
+
+    description_col = find_column(
+        df,
+        ["description", "work"]
+    )
+
+    order_col = find_column(
+        df,
+        ["order"]
+    )
+
+    if equipment_col is None:
+
+        raise ValueError(
+            "Equipment column could not be identified."
+        )
+
+    if date_col is None:
+
+        raise ValueError(
+            "Date column could not be identified."
+        )
 
     conn = get_connection()
 
     cursor = conn.cursor()
 
-    equipment_col = find_column(df, ["equipment"])
-    date_col = find_column(df, ["date"])
-    description_col = find_column(df, ["description", "work"])
-    order_col = find_column(df, ["order"])
-
-    if equipment_col is None:
-        raise ValueError(
-            "Equipment column could not be identified in OH Excel."
-        )
-
-    if date_col is None:
-        raise ValueError(
-            "Date column could not be identified in OH Excel."
-        )
-
     inserted = 0
 
     for _, row in df.iterrows():
 
-        equipment = clean_text(row[equipment_col])
-        oh_date = clean_text(row[date_col])
+        equipment = clean_text(
+            row[equipment_col]
+        )
+
+        oh_date = clean_text(
+            row[date_col]
+        )
 
         description = (
-            clean_text(row[description_col])
+            clean_text(
+                row[description_col]
+            )
             if description_col
             else ""
         )
 
         order_number = (
-            clean_text(row[order_col])
+            clean_text(
+                row[order_col]
+            )
             if order_col
             else ""
         )
@@ -669,11 +784,9 @@ def save_oh_records(df):
     return inserted
 
 
-# ============================================================
-# GET OH RECORDS
-# ============================================================
-
-def get_oh_records(equipment_name):
+def get_oh_records(
+    equipment_name
+):
 
     conn = get_connection()
 
@@ -693,14 +806,19 @@ def get_oh_records(equipment_name):
 
 
 # ============================================================
-# SPARE MASTER UPLOAD
+# SPARE MASTER
 # ============================================================
 
 def upload_spare_master(df):
 
     spare_col = find_column(
         df,
-        ["spare number", "material number", "material", "spare"]
+        [
+            "spare number",
+            "material number",
+            "material",
+            "spare"
+        ]
     )
 
     description_col = find_column(
@@ -719,6 +837,7 @@ def upload_spare_master(df):
     )
 
     if spare_col is None:
+
         raise ValueError(
             "Spare/Material column could not be identified."
         )
@@ -731,16 +850,22 @@ def upload_spare_master(df):
 
     for _, row in df.iterrows():
 
-        spare_number = clean_text(row[spare_col])
+        spare_number = clean_text(
+            row[spare_col]
+        )
 
         spare_description = (
-            clean_text(row[description_col])
+            clean_text(
+                row[description_col]
+            )
             if description_col
             else ""
         )
 
         uom = (
-            clean_text(row[uom_col])
+            clean_text(
+                row[uom_col]
+            )
             if uom_col
             else ""
         )
@@ -750,7 +875,9 @@ def upload_spare_master(df):
         if quantity_col:
 
             try:
-                quantity = float(row[quantity_col])
+                quantity = float(
+                    row[quantity_col]
+                )
             except:
                 quantity = 0
 
@@ -783,10 +910,6 @@ def upload_spare_master(df):
     return inserted
 
 
-# ============================================================
-# GET SPARE MASTER
-# ============================================================
-
 def get_spares():
 
     conn = get_connection()
@@ -807,11 +930,10 @@ def get_spares():
     return df
 
 
-# ============================================================
-# LINK SPARE TO EQUIPMENT
-# ============================================================
-
-def link_spare_to_equipment(spare_id, equipment_list):
+def link_spare_to_equipment(
+    spare_id,
+    equipment_list
+):
 
     conn = get_connection()
 
@@ -842,11 +964,9 @@ def link_spare_to_equipment(spare_id, equipment_list):
     conn.close()
 
 
-# ============================================================
-# GET SPARES FOR EQUIPMENT
-# ============================================================
-
-def get_equipment_spares(equipment_name):
+def get_equipment_spares(
+    equipment_name
+):
 
     conn = get_connection()
 
@@ -869,28 +989,95 @@ def get_equipment_spares(equipment_name):
 
 
 # ============================================================
+# LOCAL OBSERVATIONS
+# ============================================================
+
+def save_local_observation(
+    observation_date,
+    stage,
+    equipment_name,
+    defect_description,
+    severity
+):
+
+    conn = get_connection()
+
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        INSERT INTO local_observations
+        (
+            observation_date,
+            stage,
+            equipment_name,
+            defect_description,
+            severity,
+            created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (
+        str(observation_date),
+        stage,
+        equipment_name,
+        defect_description,
+        severity,
+        datetime.now().isoformat()
+    ))
+
+    conn.commit()
+    conn.close()
+
+
+def get_local_observations(
+    equipment_name
+):
+
+    conn = get_connection()
+
+    df = pd.read_sql_query("""
+        SELECT
+            observation_date AS Date,
+            stage AS Stage,
+            defect_description AS "Defect Description",
+            severity AS Severity
+        FROM local_observations
+        WHERE equipment_name = ?
+        ORDER BY observation_date DESC
+    """, conn, params=(equipment_name,))
+
+    conn.close()
+
+    return df
+
+
+# ============================================================
 # SIDEBAR
 # ============================================================
 
 equipment_list = get_equipment_list()
 
-st.sidebar.title("🔧 Maintenance Navigator")
+st.sidebar.title(
+    "🔧 Maintenance Navigator"
+)
 
 st.sidebar.info(
-    f"Current Equipment Master: {len(equipment_list)} equipment"
+    f"Current Equipment Master: "
+    f"{len(equipment_list)} equipment"
 )
+
 
 # ============================================================
 # TABS
 # ============================================================
 
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "🛠 Maintenance Entry",
     "📋 Equipment History",
     "📊 All Maintenance Records",
     "📥 SAP Notification Upload",
     "🔄 OH Record Upload",
-    "🔩 Spare Master"
+    "🔩 Spare Master",
+    "🔎 Local Observations"
 ])
 
 
@@ -900,7 +1087,9 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
 
 with tab1:
 
-    st.header("Maintenance Entry")
+    st.header(
+        "Maintenance Entry"
+    )
 
     if not equipment_list:
 
@@ -911,7 +1100,9 @@ with tab1:
 
     else:
 
-        st.subheader("Enter Maintenance Details")
+        st.subheader(
+            "Enter Maintenance Details"
+        )
 
         maintenance_date = st.date_input(
             "Maintenance Date",
@@ -950,9 +1141,12 @@ with tab1:
             "Work Carried Out"
         )
 
-        st.subheader("Materials Consumed")
+        st.subheader(
+            "Materials Consumed"
+        )
 
         if "materials" not in st.session_state:
+
             st.session_state.materials = [
                 {
                     "Material": "",
@@ -961,7 +1155,9 @@ with tab1:
                 }
             ]
 
-        for i in range(len(st.session_state.materials)):
+        for i in range(
+            len(st.session_state.materials)
+        ):
 
             col1, col2, col3, col4 = st.columns(
                 [3, 2, 1.5, 1]
@@ -969,26 +1165,40 @@ with tab1:
 
             with col1:
 
-                st.session_state.materials[i]["Material"] = st.text_input(
+                st.session_state.materials[i][
+                    "Material"
+                ] = st.text_input(
                     "Material",
-                    value=st.session_state.materials[i]["Material"],
+                    value=st.session_state.materials[i][
+                        "Material"
+                    ],
                     key=f"material_{i}"
                 )
 
             with col2:
 
-                st.session_state.materials[i]["UOM"] = st.text_input(
+                st.session_state.materials[i][
+                    "UOM"
+                ] = st.text_input(
                     "UOM",
-                    value=st.session_state.materials[i]["UOM"],
+                    value=st.session_state.materials[i][
+                        "UOM"
+                    ],
                     key=f"uom_{i}"
                 )
 
             with col3:
 
-                st.session_state.materials[i]["Qty"] = st.number_input(
+                st.session_state.materials[i][
+                    "Qty"
+                ] = st.number_input(
                     "Qty",
                     min_value=0.0,
-                    value=float(st.session_state.materials[i]["Qty"]),
+                    value=float(
+                        st.session_state.materials[i][
+                            "Qty"
+                        ]
+                    ),
                     key=f"qty_{i}"
                 )
 
@@ -1002,7 +1212,9 @@ with tab1:
                     st.session_state.materials.pop(i)
                     st.rerun()
 
-        if st.button("➕ Add Material"):
+        if st.button(
+            "➕ Add Material"
+        ):
 
             st.session_state.materials.append({
                 "Material": "",
@@ -1014,7 +1226,11 @@ with tab1:
 
         uploaded_images = st.file_uploader(
             "Maintenance Images",
-            type=["jpg", "jpeg", "png"],
+            type=[
+                "jpg",
+                "jpeg",
+                "png"
+            ],
             accept_multiple_files=True
         )
 
@@ -1068,7 +1284,9 @@ with tab1:
 
 with tab2:
 
-    st.header("Equipment History")
+    st.header(
+        "Equipment History"
+    )
 
     equipment_list = get_equipment_list()
 
@@ -1087,7 +1305,13 @@ with tab2:
             key="history_equipment"
         )
 
-        st.subheader("Maintenance History")
+        # ====================================================
+        # MAINTENANCE HISTORY
+        # ====================================================
+
+        st.subheader(
+            "🛠 Maintenance History"
+        )
 
         history_df = get_equipment_history(
             selected_equipment
@@ -1103,26 +1327,38 @@ with tab2:
 
             for _, row in history_df.iterrows():
 
-                with st.container(border=True):
+                with st.container(
+                    border=True
+                ):
 
                     col1, col2, col3, col4, col5, col6 = st.columns(
                         [1.2, 1.2, 1.2, 1.5, 4, 1]
                     )
 
                     with col1:
-                        st.write(row["Date"])
+                        st.write(
+                            row["Date"]
+                        )
 
                     with col2:
-                        st.write(row["Stage"])
+                        st.write(
+                            row["Stage"]
+                        )
 
                     with col3:
-                        st.write(row["Type"])
+                        st.write(
+                            row["Type"]
+                        )
 
                     with col4:
-                        st.write(row["Order Number"])
+                        st.write(
+                            row["Order Number"]
+                        )
 
                     with col5:
-                        st.write(row["Work Carried Out"])
+                        st.write(
+                            row["Work Carried Out"]
+                        )
 
                     with col6:
 
@@ -1137,15 +1373,19 @@ with tab2:
 
                             st.rerun()
 
-        # ----------------------------------------------------
-        # EDIT FORM
-        # ----------------------------------------------------
+        # ====================================================
+        # EDIT MAINTENANCE RECORD
+        # ====================================================
 
         if "edit_record_id" in st.session_state:
 
-            record_id = st.session_state.edit_record_id
+            record_id = (
+                st.session_state.edit_record_id
+            )
 
-            record = get_maintenance_record(record_id)
+            record = get_maintenance_record(
+                record_id
+            )
 
             if record:
 
@@ -1183,12 +1423,16 @@ with tab2:
                     "Other"
                 ]
 
-                current_stage = record.get(
-                    "stage"
-                ) or "Stage-1"
+                current_stage = (
+                    record.get("stage")
+                    or "Stage-1"
+                )
 
                 if current_stage not in stage_options:
-                    stage_options.append(current_stage)
+
+                    stage_options.append(
+                        current_stage
+                    )
 
                 edit_stage = st.selectbox(
                     "Stage",
@@ -1205,12 +1449,16 @@ with tab2:
                     "OH"
                 ]
 
-                current_type = record.get(
-                    "maintenance_type"
-                ) or "Defect"
+                current_type = (
+                    record.get("maintenance_type")
+                    or "Defect"
+                )
 
                 if current_type not in type_options:
-                    type_options.append(current_type)
+
+                    type_options.append(
+                        current_type
+                    )
 
                 edit_type = st.selectbox(
                     "Maintenance Type",
@@ -1221,13 +1469,19 @@ with tab2:
                     key="edit_type"
                 )
 
-                equipment_options = get_equipment_list()
-
-                current_equipment = record.get(
-                    "equipment_name"
+                equipment_options = (
+                    get_equipment_list()
                 )
 
-                if current_equipment not in equipment_options:
+                current_equipment = (
+                    record.get("equipment_name")
+                )
+
+                if (
+                    current_equipment
+                    not in equipment_options
+                ):
+
                     equipment_options.append(
                         current_equipment
                     )
@@ -1243,32 +1497,37 @@ with tab2:
 
                 edit_order = st.text_input(
                     "Order Number",
-                    value=record.get(
-                        "order_number"
-                    ) or "",
+                    value=(
+                        record.get(
+                            "order_number"
+                        )
+                        or ""
+                    ),
                     key="edit_order"
                 )
 
                 edit_work = st.text_area(
                     "Work Carried Out",
-                    value=record.get(
-                        "work_carried_out"
-                    ) or "",
+                    value=(
+                        record.get(
+                            "work_carried_out"
+                        )
+                        or ""
+                    ),
                     key="edit_work"
                 )
 
-                # ------------------------------------------------
-                # Existing Materials
-                # ------------------------------------------------
-
-                st.subheader("Materials Consumed")
+                st.subheader(
+                    "Materials Consumed"
+                )
 
                 try:
 
                     existing_materials = json.loads(
                         record.get(
                             "materials_consumed"
-                        ) or "[]"
+                        )
+                        or "[]"
                     )
 
                 except:
@@ -1290,7 +1549,9 @@ with tab2:
                     )
 
                 for i in range(
-                    len(st.session_state.edit_materials)
+                    len(
+                        st.session_state.edit_materials
+                    )
                 ):
 
                     c1, c2, c3, c4 = st.columns(
@@ -1304,7 +1565,8 @@ with tab2:
                         ] = st.text_input(
                             "Material",
                             value=st.session_state.edit_materials[i].get(
-                                "Material", ""
+                                "Material",
+                                ""
                             ),
                             key=f"edit_material_{record_id}_{i}"
                         )
@@ -1316,7 +1578,8 @@ with tab2:
                         ] = st.text_input(
                             "UOM",
                             value=st.session_state.edit_materials[i].get(
-                                "UOM", ""
+                                "UOM",
+                                ""
                             ),
                             key=f"edit_uom_{record_id}_{i}"
                         )
@@ -1330,7 +1593,8 @@ with tab2:
                             min_value=0.0,
                             value=float(
                                 st.session_state.edit_materials[i].get(
-                                    "Qty", 0
+                                    "Qty",
+                                    0
                                 )
                             ),
                             key=f"edit_qty_{record_id}_{i}"
@@ -1359,10 +1623,6 @@ with tab2:
 
                     st.rerun()
 
-                # ------------------------------------------------
-                # Existing Images
-                # ------------------------------------------------
-
                 existing_images = []
 
                 try:
@@ -1370,7 +1630,8 @@ with tab2:
                     existing_images = json.loads(
                         record.get(
                             "image_path"
-                        ) or "[]"
+                        )
+                        or "[]"
                     )
 
                 except:
@@ -1379,11 +1640,15 @@ with tab2:
 
                 if existing_images:
 
-                    st.subheader("Existing Images")
+                    st.subheader(
+                        "Existing Images"
+                    )
 
                     for image_path in existing_images:
 
-                        image_file = Path(image_path)
+                        image_file = Path(
+                            image_path
+                        )
 
                         if image_file.exists():
 
@@ -1394,7 +1659,11 @@ with tab2:
 
                 new_images = st.file_uploader(
                     "Add New Images",
-                    type=["jpg", "jpeg", "png"],
+                    type=[
+                        "jpg",
+                        "jpeg",
+                        "png"
+                    ],
                     accept_multiple_files=True,
                     key=f"edit_images_{record_id}"
                 )
@@ -1409,9 +1678,11 @@ with tab2:
                         key=f"update_{record_id}"
                     ):
 
-                        new_image_paths = save_uploaded_images(
-                            new_images,
-                            edit_equipment
+                        new_image_paths = (
+                            save_uploaded_images(
+                                new_images,
+                                edit_equipment
+                            )
                         )
 
                         final_images = (
@@ -1438,6 +1709,7 @@ with tab2:
                         del st.session_state.edit_record_id
 
                         if "edit_materials" in st.session_state:
+
                             del st.session_state.edit_materials
 
                         st.rerun()
@@ -1452,20 +1724,53 @@ with tab2:
                         del st.session_state.edit_record_id
 
                         if "edit_materials" in st.session_state:
+
                             del st.session_state.edit_materials
 
                         st.rerun()
 
-        # ----------------------------------------------------
-        # SAP Notifications
-        # ----------------------------------------------------
+        # ====================================================
+        # LOCAL OBSERVATIONS
+        # ====================================================
 
         st.divider()
 
-        st.subheader("SAP Notifications")
+        st.subheader(
+            "🔎 Local Observations"
+        )
 
-        notification_df = get_equipment_notifications(
+        observation_df = get_local_observations(
             selected_equipment
+        )
+
+        if observation_df.empty:
+
+            st.info(
+                "No local observations available for this equipment."
+            )
+
+        else:
+
+            st.dataframe(
+                observation_df,
+                use_container_width=True,
+                hide_index=True
+            )
+
+        # ====================================================
+        # SAP NOTIFICATIONS
+        # ====================================================
+
+        st.divider()
+
+        st.subheader(
+            "📢 SAP Notifications"
+        )
+
+        notification_df = (
+            get_equipment_notifications(
+                selected_equipment
+            )
         )
 
         if notification_df.empty:
@@ -1482,13 +1787,15 @@ with tab2:
                 hide_index=True
             )
 
-        # ----------------------------------------------------
-        # OH Records
-        # ----------------------------------------------------
+        # ====================================================
+        # OH RECORDS
+        # ====================================================
 
         st.divider()
 
-        st.subheader("OH Records")
+        st.subheader(
+            "🔄 OH Records"
+        )
 
         oh_df = get_oh_records(
             selected_equipment
@@ -1508,13 +1815,15 @@ with tab2:
                 hide_index=True
             )
 
-        # ----------------------------------------------------
-        # Linked Spares
-        # ----------------------------------------------------
+        # ====================================================
+        # LINKED SPARES
+        # ====================================================
 
         st.divider()
 
-        st.subheader("Linked Spares")
+        st.subheader(
+            "🔩 Linked Spares"
+        )
 
         spare_df = get_equipment_spares(
             selected_equipment
@@ -1541,7 +1850,9 @@ with tab2:
 
 with tab3:
 
-    st.header("All Maintenance Records")
+    st.header(
+        "All Maintenance Records"
+    )
 
     all_records = get_all_records()
 
@@ -1566,17 +1877,23 @@ with tab3:
 
 with tab4:
 
-    st.header("SAP Notification Upload")
+    st.header(
+        "SAP Notification Upload"
+    )
 
     st.info(
         "Uploading a new SAP Excel will completely replace "
-        "the current Equipment Master and SAP Notification History. "
-        "Existing manual maintenance records will NOT be deleted."
+        "the current Equipment Master and SAP Notification "
+        "History. Existing manual maintenance records and "
+        "local observations will NOT be deleted."
     )
 
     sap_file = st.file_uploader(
         "Upload SAP Notification Excel",
-        type=["xlsx", "xls"],
+        type=[
+            "xlsx",
+            "xls"
+        ],
         key="sap_upload"
     )
 
@@ -1643,16 +1960,21 @@ with tab4:
                     clean_text
                 )
 
-                notification_df = notification_df[
+                notification_df = (
                     notification_df[
-                        "equipment_name"
-                    ] != ""
-                ]
+                        notification_df[
+                            "equipment_name"
+                        ] != ""
+                    ]
+                )
 
                 equipment_list_new = sorted(
                     notification_df[
                         "equipment_name"
-                    ].dropna().unique().tolist()
+                    ]
+                    .dropna()
+                    .unique()
+                    .tolist()
                 )
 
                 st.success(
@@ -1672,7 +1994,11 @@ with tab4:
                         )
                     )
 
-                    if "history_equipment" in st.session_state:
+                    if (
+                        "history_equipment"
+                        in st.session_state
+                    ):
+
                         del st.session_state[
                             "history_equipment"
                         ]
@@ -1698,7 +2024,9 @@ with tab4:
 
 with tab5:
 
-    st.header("OH Record Upload")
+    st.header(
+        "OH Record Upload"
+    )
 
     st.info(
         "Upload the OH Excel file. "
@@ -1708,7 +2036,10 @@ with tab5:
 
     oh_file = st.file_uploader(
         "Upload OH Excel",
-        type=["xlsx", "xls"],
+        type=[
+            "xlsx",
+            "xls"
+        ],
         key="oh_upload"
     )
 
@@ -1770,23 +2101,26 @@ with tab5:
 
 with tab6:
 
-    st.header("🔩 Spare Master")
+    st.header(
+        "🔩 Spare Master"
+    )
 
-    # --------------------------------------------------------
-    # Upload Spare Excel
-    # --------------------------------------------------------
-
-    st.subheader("Upload Spare List")
+    st.subheader(
+        "Upload Spare List"
+    )
 
     st.info(
         "Upload your spare/material Excel file. "
-        "The application will identify the spare/material number, "
-        "description, UOM and quantity automatically."
+        "The application will identify the spare/material "
+        "number, description, UOM and quantity automatically."
     )
 
     spare_file = st.file_uploader(
         "Upload Spare List Excel",
-        type=["xlsx", "xls"],
+        type=[
+            "xlsx",
+            "xls"
+        ],
         key="spare_upload"
     )
 
@@ -1819,13 +2153,11 @@ with tab6:
                 f"Error processing Spare Excel: {str(e)}"
             )
 
-    # --------------------------------------------------------
-    # Spare List
-    # --------------------------------------------------------
-
     st.divider()
 
-    st.subheader("Spare Master List")
+    st.subheader(
+        "Spare Master List"
+    )
 
     spares_df = get_spares()
 
@@ -1846,10 +2178,6 @@ with tab6:
             use_container_width=True,
             hide_index=True
         )
-
-        # ----------------------------------------------------
-        # Link Spares
-        # ----------------------------------------------------
 
         st.divider()
 
@@ -1880,9 +2208,11 @@ with tab6:
             selected_spare_label
         ]
 
-        selected_equipment_for_spare = st.multiselect(
-            "Select Equipment",
-            equipment_list
+        selected_equipment_for_spare = (
+            st.multiselect(
+                "Select Equipment",
+                equipment_list
+            )
         )
 
         if st.button(
@@ -1905,6 +2235,101 @@ with tab6:
 
                 st.success(
                     "Spare linked to selected equipment successfully."
+                )
+
+                st.rerun()
+
+
+# ============================================================
+# TAB 7 - LOCAL OBSERVATIONS
+# ============================================================
+
+with tab7:
+
+    st.header(
+        "🔎 Local Observation Entry"
+    )
+
+    st.info(
+        "Enter field observations identified during "
+        "inspection or maintenance activities."
+    )
+
+    equipment_list = get_equipment_list()
+
+    if not equipment_list:
+
+        st.warning(
+            "No equipment master is available. "
+            "Please upload the SAP Excel first."
+        )
+
+    else:
+
+        observation_date = st.date_input(
+            "Observation Date",
+            value=date.today()
+        )
+
+        stage = st.selectbox(
+            "Stage",
+            [
+                "Stage-1",
+                "Stage-2",
+                "Stage-3",
+                "Other"
+            ],
+            key="observation_stage"
+        )
+
+        equipment_name = st.selectbox(
+            "Equipment",
+            equipment_list,
+            key="observation_equipment"
+        )
+
+        defect_description = st.text_area(
+            "Defect Description",
+            placeholder=(
+                "Enter the observed defect / "
+                "abnormality..."
+            ),
+            key="observation_description"
+        )
+
+        severity = st.selectbox(
+            "Severity",
+            [
+                "Low",
+                "Medium",
+                "High"
+            ],
+            key="observation_severity"
+        )
+
+        if st.button(
+            "💾 Save Observation",
+            type="primary"
+        ):
+
+            if not defect_description.strip():
+
+                st.error(
+                    "Please enter the defect description."
+                )
+
+            else:
+
+                save_local_observation(
+                    observation_date,
+                    stage,
+                    equipment_name,
+                    defect_description,
+                    severity
+                )
+
+                st.success(
+                    "Local observation saved successfully."
                 )
 
                 st.rerun()
