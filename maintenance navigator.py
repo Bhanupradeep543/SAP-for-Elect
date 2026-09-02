@@ -31,6 +31,20 @@ def initialize_database():
         )
     """)
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS sap_notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            notification_number TEXT,
+            notification_date TEXT,
+            equipment_name TEXT,
+            notification_type TEXT,
+            description TEXT,
+            status TEXT,
+            raw_data TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -64,6 +78,45 @@ def save_record(maintenance_date, stage, equipment_name, order_number, work_carr
     conn.commit()
     conn.close()
 
+def save_sap_notifications(df):
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("DELETE FROM sap_notifications")
+
+    for _, row in df.iterrows():
+
+        raw_data = json.dumps(
+            row.to_dict(),
+            default=str
+        )
+
+        cursor.execute("""
+            INSERT INTO sap_notifications
+            (
+                notification_number,
+                notification_date,
+                equipment_name,
+                notification_type,
+                description,
+                status,
+                raw_data
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            str(row.get("notification_number", "")),
+            str(row.get("notification_date", "")),
+            str(row.get("equipment_name", "")),
+            str(row.get("notification_type", "")),
+            str(row.get("description", "")),
+            str(row.get("status", "")),
+            raw_data
+        ))
+
+    conn.commit()
+    conn.close()
+
 def get_equipment_history(equipment_name):
 
     conn = get_connection()
@@ -78,8 +131,29 @@ def get_equipment_history(equipment_name):
             materials_consumed AS 'Materials Consumed',
             image_path AS Image
         FROM maintenance_records
-        WHERE equipment_name = ?
+        WHERE LOWER(TRIM(equipment_name)) = LOWER(TRIM(?))
         ORDER BY maintenance_date DESC, id DESC
+    """, conn, params=(equipment_name,))
+
+    conn.close()
+
+    return df
+
+def get_equipment_notifications(equipment_name):
+
+    conn = get_connection()
+
+    df = pd.read_sql_query("""
+        SELECT
+            notification_number AS 'Notification Number',
+            notification_date AS Date,
+            equipment_name AS Equipment,
+            notification_type AS 'Notification Type',
+            description AS Description,
+            status AS Status
+        FROM sap_notifications
+        WHERE LOWER(TRIM(equipment_name)) = LOWER(TRIM(?))
+        ORDER BY notification_date DESC, id DESC
     """, conn, params=(equipment_name,))
 
     conn.close()
@@ -107,6 +181,26 @@ def get_all_records():
 
     return df
 
+def get_all_notifications():
+
+    conn = get_connection()
+
+    df = pd.read_sql_query("""
+        SELECT
+            notification_number AS 'Notification Number',
+            notification_date AS Date,
+            equipment_name AS Equipment,
+            notification_type AS 'Notification Type',
+            description AS Description,
+            status AS Status
+        FROM sap_notifications
+        ORDER BY notification_date DESC
+    """, conn)
+
+    conn.close()
+
+    return df
+
 initialize_database()
 
 st.set_page_config(
@@ -116,13 +210,21 @@ st.set_page_config(
 )
 
 st.title("🔧 Maintenance History & Decision Support System")
-st.caption("Equipment-wise maintenance history recording system")
 
-tab1, tab2, tab3 = st.tabs([
+st.caption(
+    "Equipment-wise maintenance records and SAP notification history"
+)
+
+tab1, tab2, tab3, tab4 = st.tabs([
     "📝 Maintenance Entry",
     "📚 Equipment History",
-    "📊 All Maintenance Records"
+    "📊 All Maintenance Records",
+    "📥 SAP Notification Upload"
 ])
+
+# ============================================================
+# TAB 1 - MAINTENANCE ENTRY
+# ============================================================
 
 with tab1:
 
@@ -172,6 +274,7 @@ with tab1:
     st.subheader("🔩 Material Consumed")
 
     if "materials" not in st.session_state:
+
         st.session_state.materials = [
             {
                 "material": "",
@@ -182,7 +285,9 @@ with tab1:
 
     for i in range(len(st.session_state.materials)):
 
-        col1, col2, col3, col4 = st.columns([5, 2, 2, 1])
+        col1, col2, col3, col4 = st.columns(
+            [5, 2, 2, 1]
+        )
 
         with col1:
 
@@ -207,7 +312,9 @@ with tab1:
             st.session_state.materials[i]["qty"] = st.number_input(
                 "Qty" if i == 0 else "",
                 min_value=0.0,
-                value=float(st.session_state.materials[i]["qty"]),
+                value=float(
+                    st.session_state.materials[i]["qty"]
+                ),
                 step=0.01,
                 key=f"qty_{i}"
             )
@@ -222,7 +329,6 @@ with tab1:
                 ):
 
                     st.session_state.materials.pop(i)
-
                     st.rerun()
 
     if st.button(
@@ -244,7 +350,11 @@ with tab1:
 
     uploaded_images = st.file_uploader(
         "📷 Upload Equipment / Maintenance Images",
-        type=["jpg", "jpeg", "png"],
+        type=[
+            "jpg",
+            "jpeg",
+            "png"
+        ],
         accept_multiple_files=True
     )
 
@@ -258,11 +368,15 @@ with tab1:
 
         if not equipment_name.strip():
 
-            st.error("Please enter the Equipment Name.")
+            st.error(
+                "Please enter the Equipment Name."
+            )
 
         elif not work_carried_out.strip():
 
-            st.error("Please enter the Work Carried Out details.")
+            st.error(
+                "Please enter the Work Carried Out details."
+            )
 
         else:
 
@@ -279,7 +393,7 @@ with tab1:
                     if not material["material"].strip():
 
                         st.error(
-                            "Please enter Material name for all material rows."
+                            "Please enter Material name."
                         )
 
                         st.stop()
@@ -314,7 +428,10 @@ with tab1:
 
                 equipment_folder = (
                     IMAGE_DIR /
-                    equipment_name.replace(" ", "_")
+                    equipment_name.replace(
+                        " ",
+                        "_"
+                    )
                 )
 
                 equipment_folder.mkdir(
@@ -378,48 +495,141 @@ with tab1:
                 }
             ]
 
+# ============================================================
+# TAB 2 - EQUIPMENT HISTORY
+# ============================================================
+
 with tab2:
 
-    st.header("📚 Equipment-wise Maintenance History")
+    st.header("📚 Equipment-wise History")
 
-    all_records = get_all_records()
+    maintenance_records = get_all_records()
+    sap_notifications = get_all_notifications()
 
-    if all_records.empty:
+    equipment_names = set()
+
+    if not maintenance_records.empty:
+
+        equipment_names.update(
+            maintenance_records["Equipment"]
+            .dropna()
+            .astype(str)
+            .tolist()
+        )
+
+    if not sap_notifications.empty:
+
+        equipment_names.update(
+            sap_notifications["Equipment"]
+            .dropna()
+            .astype(str)
+            .tolist()
+        )
+
+    equipment_names = sorted(
+        list(equipment_names)
+    )
+
+    if not equipment_names:
 
         st.info(
-            "No maintenance records available yet."
+            "No equipment data available. "
+            "Enter maintenance records or upload SAP notifications."
         )
 
     else:
 
-        equipment_list = sorted(
-            all_records["Equipment"]
-            .dropna()
-            .unique()
-            .tolist()
-        )
-
         selected_equipment = st.selectbox(
-            "Select Equipment",
-            equipment_list
+            "🔍 Select Equipment",
+            equipment_names
         )
 
-        history = get_equipment_history(
+        st.divider()
+
+        # ----------------------------------------------------
+        # SUMMARY
+        # ----------------------------------------------------
+
+        maintenance_history = get_equipment_history(
             selected_equipment
         )
 
-        if not history.empty:
+        notification_history = get_equipment_notifications(
+            selected_equipment
+        )
 
-            st.subheader(
-                f"Maintenance History — {selected_equipment}"
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+
+            st.metric(
+                "Maintenance Records",
+                len(maintenance_history)
+            )
+
+        with col2:
+
+            st.metric(
+                "SAP Notifications",
+                len(notification_history)
+            )
+
+        with col3:
+
+            total_records = (
+                len(maintenance_history)
+                +
+                len(notification_history)
             )
 
             st.metric(
-                "Total Maintenance Records",
-                len(history)
+                "Total History",
+                total_records
             )
 
-            display_history = history.drop(
+        # ----------------------------------------------------
+        # SAP NOTIFICATIONS
+        # ----------------------------------------------------
+
+        st.divider()
+
+        st.subheader(
+            "🔔 SAP Notification History"
+        )
+
+        if notification_history.empty:
+
+            st.info(
+                "No SAP notifications found for this equipment."
+            )
+
+        else:
+
+            st.dataframe(
+                notification_history,
+                use_container_width=True,
+                hide_index=True
+            )
+
+        # ----------------------------------------------------
+        # MAINTENANCE RECORDS
+        # ----------------------------------------------------
+
+        st.divider()
+
+        st.subheader(
+            "🔧 Maintenance Records"
+        )
+
+        if maintenance_history.empty:
+
+            st.info(
+                "No manually entered maintenance records found."
+            )
+
+        else:
+
+            display_history = maintenance_history.drop(
                 columns=["Image"]
             ).copy()
 
@@ -429,11 +639,21 @@ with tab2:
                 hide_index=True
             )
 
-            st.subheader(
-                "🔩 Material Consumption History"
-            )
+        # ----------------------------------------------------
+        # MATERIAL HISTORY
+        # ----------------------------------------------------
 
-            for _, row in history.iterrows():
+        st.divider()
+
+        st.subheader(
+            "🔩 Material Consumption History"
+        )
+
+        if not maintenance_history.empty:
+
+            material_found = False
+
+            for _, row in maintenance_history.iterrows():
 
                 try:
 
@@ -446,6 +666,8 @@ with tab2:
                     materials = []
 
                 if materials:
+
+                    material_found = True
 
                     st.markdown(
                         f"**Date:** {row['Date']} | "
@@ -468,11 +690,27 @@ with tab2:
                         hide_index=True
                     )
 
-            st.subheader(
-                "📷 Maintenance Images"
-            )
+            if not material_found:
 
-            for _, row in history.iterrows():
+                st.info(
+                    "No material consumption recorded."
+                )
+
+        # ----------------------------------------------------
+        # IMAGES
+        # ----------------------------------------------------
+
+        st.divider()
+
+        st.subheader(
+            "📷 Maintenance Images"
+        )
+
+        if not maintenance_history.empty:
+
+            images_found = False
+
+            for _, row in maintenance_history.iterrows():
 
                 image_paths = row["Image"]
 
@@ -485,6 +723,8 @@ with tab2:
                             and Path(image_path).exists()
                         ):
 
+                            images_found = True
+
                             st.image(
                                 image_path,
                                 caption=(
@@ -494,9 +734,21 @@ with tab2:
                                 width=400
                             )
 
+            if not images_found:
+
+                st.info(
+                    "No images available."
+                )
+
+# ============================================================
+# TAB 3 - ALL MAINTENANCE RECORDS
+# ============================================================
+
 with tab3:
 
-    st.header("📊 All Maintenance Records")
+    st.header(
+        "📊 All Maintenance Records"
+    )
 
     all_records = get_all_records()
 
@@ -527,7 +779,9 @@ with tab3:
 
             start_date = st.date_input(
                 "From Date",
-                value=date.today().replace(day=1)
+                value=date.today().replace(
+                    day=1
+                )
             )
 
         with col3:
@@ -542,7 +796,8 @@ with tab3:
         if selected_stage != "All":
 
             filtered = filtered[
-                filtered["Stage"] == selected_stage
+                filtered["Stage"]
+                == selected_stage
             ]
 
         filtered["Date"] = pd.to_datetime(
@@ -576,22 +831,227 @@ with tab3:
             mime="text/csv"
         )
 
-st.sidebar.title("System Information")
+# ============================================================
+# TAB 4 - SAP NOTIFICATION UPLOAD
+# ============================================================
+
+with tab4:
+
+    st.header(
+        "📥 Upload SAP Notifications"
+    )
+
+    st.info(
+        "Upload the Excel file containing SAP notifications "
+        "for all equipments."
+    )
+
+    uploaded_sap_file = st.file_uploader(
+        "Select SAP Notification Excel File",
+        type=["xlsx", "xls"],
+        key="sap_notification_upload"
+    )
+
+    if uploaded_sap_file:
+
+        try:
+
+            sap_df = pd.read_excel(
+                uploaded_sap_file
+            )
+
+            st.success(
+                f"{len(sap_df)} rows found in the uploaded file."
+            )
+
+            st.subheader(
+                "Preview SAP Data"
+            )
+
+            st.dataframe(
+                sap_df.head(20),
+                use_container_width=True,
+                hide_index=True
+            )
+
+            st.divider()
+
+            st.subheader(
+                "Map SAP Columns"
+            )
+
+            st.caption(
+                "Select the corresponding column from your SAP Excel file."
+            )
+
+            excel_columns = sap_df.columns.tolist()
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+
+                notification_number_column = st.selectbox(
+                    "Notification Number",
+                    excel_columns,
+                    key="notification_number_column"
+                )
+
+                notification_date_column = st.selectbox(
+                    "Notification Date",
+                    excel_columns,
+                    key="notification_date_column"
+                )
+
+                equipment_column = st.selectbox(
+                    "Equipment Name",
+                    excel_columns,
+                    key="equipment_column"
+                )
+
+            with col2:
+
+                notification_type_column = st.selectbox(
+                    "Notification Type",
+                    ["-- Not Available --"] + excel_columns,
+                    key="notification_type_column"
+                )
+
+                description_column = st.selectbox(
+                    "Description",
+                    excel_columns,
+                    key="description_column"
+                )
+
+                status_column = st.selectbox(
+                    "Status",
+                    ["-- Not Available --"] + excel_columns,
+                    key="status_column"
+                )
+
+            if st.button(
+                "📥 Import SAP Notifications",
+                type="primary",
+                use_container_width=True
+            ):
+
+                mapped_df = pd.DataFrame()
+
+                mapped_df[
+                    "notification_number"
+                ] = sap_df[
+                    notification_number_column
+                ].astype(str)
+
+                mapped_df[
+                    "notification_date"
+                ] = sap_df[
+                    notification_date_column
+                ].astype(str)
+
+                mapped_df[
+                    "equipment_name"
+                ] = sap_df[
+                    equipment_column
+                ].astype(str)
+
+                if (
+                    notification_type_column
+                    != "-- Not Available --"
+                ):
+
+                    mapped_df[
+                        "notification_type"
+                    ] = sap_df[
+                        notification_type_column
+                    ].astype(str)
+
+                else:
+
+                    mapped_df[
+                        "notification_type"
+                    ] = ""
+
+                mapped_df[
+                    "description"
+                ] = sap_df[
+                    description_column
+                ].astype(str)
+
+                if (
+                    status_column
+                    != "-- Not Available --"
+                ):
+
+                    mapped_df[
+                        "status"
+                    ] = sap_df[
+                        status_column
+                    ].astype(str)
+
+                else:
+
+                    mapped_df[
+                        "status"
+                    ] = ""
+
+                mapped_df = mapped_df[
+                    mapped_df[
+                        "equipment_name"
+                    ].str.strip() != ""
+                ]
+
+                save_sap_notifications(
+                    mapped_df
+                )
+
+                st.success(
+                    f"{len(mapped_df)} SAP notifications "
+                    "imported successfully."
+                )
+
+                st.rerun()
+
+    st.divider()
+
+    existing_notifications = get_all_notifications()
+
+    st.subheader(
+        "Current SAP Notification Database"
+    )
+
+    if existing_notifications.empty:
+
+        st.info(
+            "No SAP notifications have been imported yet."
+        )
+
+    else:
+
+        st.write(
+            f"Total notifications: "
+            f"**{len(existing_notifications)}**"
+        )
+
+        st.dataframe(
+            existing_notifications,
+            use_container_width=True,
+            hide_index=True
+        )
+
+st.sidebar.title(
+    "🔧 Maintenance System"
+)
 
 st.sidebar.info(
     """
-    Maintenance History System
+    System Modules
 
-    Records maintained:
-
-    • Date
-    • Stage
-    • Equipment
-    • Order Number
-    • Work Carried Out
-    • Material
-    • UOM
-    • Quantity
+    • Maintenance Entry
+    • Material Consumption
+    • Equipment History
+    • SAP Notifications
     • Maintenance Images
+    • Date Filtering
+    • Equipment-wise Search
     """
 )
